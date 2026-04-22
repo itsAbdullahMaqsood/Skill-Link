@@ -1,0 +1,112 @@
+name: skilllink
+description: "SkillChain (digital) + SkillLink (labour) merged Flutter app."
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # State management
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.6.1
+
+  # Routing
+  go_router: ^14.8.1
+
+  # Networking
+  dio: ^5.7.0
+
+  # Storage
+  flutter_secure_storage: ^9.0.0
+  shared_preferences: ^2.2.2
+
+  # SVG / icons
+  flutter_svg: ^2.0.9
+
+  # Localisation / formatting
+  intl: ^0.19.0
+
+  # UI helpers (skillchain)
+  dropdown_search: ^5.0.0
+
+  # Media + files
+  image_picker: ^1.1.2
+  flutter_image_compress: ^2.3.0
+  file_picker: ^8.0.0
+  path_provider: ^2.1.5
+  path: ^1.8.3
+  cached_network_image: ^3.4.1
+
+  # Location
+  geolocator: ^13.0.2
+  permission_handler: ^11.4.0
+
+  # Maps (labour)
+  google_maps_flutter: ^2.12.1
+
+  # Charts (labour dashboards)
+  fl_chart: ^0.70.2
+
+  # Auth providers
+  google_sign_in: ^6.2.2
+
+  # Realtime chat (skillchain)
+  socket_io_client: ^3.1.0
+
+  # Local notifications (used by skillink deep-link tap handler).
+  flutter_local_notifications: ^18.0.1
+
+  # URL launcher
+  url_launcher: ^6.3.1
+
+  # Models / serialisation
+  freezed_annotation: ^3.0.0
+  json_annotation: ^4.9.0
+
+  # Fonts (skillink theme)
+  google_fonts: ^6.2.1
+
+  # Env config
+  flutter_dotenv: ^5.2.1
+
+  # Markdown rendering (skillink AI chat)
+  flutter_markdown: ^0.7.6
+
+  # Audio + video (skillink chat attachments)
+  record: ^6.2.0
+  audioplayers: ^6.1.0
+  video_player: ^2.11.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+  # Code generation (skillink models / providers)
+  build_runner: ^2.4.14
+  freezed: ^3.0.0
+  json_serializable: ^6.9.4
+  riverpod_generator: ^2.6.5
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - .env
+    - assets/icons/
+    - assets/images/
+    - assets/skillink/images/
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/images/app_icon_launcher.png
+  remove_alpha_ios: true
+  min_sdk_android: 23

@@ -1,0 +1,4 @@
+enum ExchangeType {
+  skillExchange,
+  timecoinExchange,
+}

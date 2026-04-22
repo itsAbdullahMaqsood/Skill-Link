@@ -1,0 +1,106 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:skilllink/skillink/data/providers.dart';
+import 'package:skilllink/skillink/data/repositories/service_request_repository.dart';
+import 'package:skilllink/skillink/routing/routes.dart';
+import 'package:skilllink/skillink/ui/core/themes/app_colors.dart';
+import 'package:skilllink/skillink/ui/core/themes/app_typography.dart';
+import 'package:skilllink/skillink/ui/core/ui/empty_state.dart';
+import 'package:skilllink/skillink/ui/core/ui/loading_shimmer.dart';
+import 'package:skilllink/skillink/ui/service_requests/widgets/sent_requests_screen.dart';
+
+/// Direct booking / service requests for the worker from
+/// [GET /request-services/my?role=worker].
+class WorkerIncomingRequestsScreen extends ConsumerWidget {
+  const WorkerIncomingRequestsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async =
+        ref.watch(myServiceRequestsProvider(ServiceRequestRole.worker));
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        title: Text('Incoming Requests', style: AppTypography.headlineMedium),
+      ),
+      body: RefreshIndicator(
+        onRefresh: () => ref.refresh(
+          myServiceRequestsProvider(ServiceRequestRole.worker).future,
+        ),
+        child: async.when(
+          data: (items) {
+            if (items.isEmpty) {
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: const [
+                  SizedBox(height: 120),
+                  EmptyState(
+                    icon: Icons.inbox_outlined,
+                    title: 'No requests yet',
+                    subtitle:
+                        'When homeowners book you directly, their requests '
+                        'appear here.',
+                  ),
+                ],
+              );
+            }
+            return ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              itemCount: items.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
+              itemBuilder: (_, i) {
+                final req = items[i];
+                return SentRequestTile(
+                  request: req,
+                  onTap: () => context
+                      .push(Routes.receivedRequestDetail(req.id)),
+                );
+              },
+            );
+          },
+          loading: () => ListView(
+            padding: const EdgeInsets.all(16),
+            children: const [
+              LoadingShimmer(height: 96),
+              SizedBox(height: 10),
+              LoadingShimmer(height: 96),
+              SizedBox(height: 10),
+              LoadingShimmer(height: 96),
+            ],
+          ),
+          error: (e, _) => ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(24),
+            children: [
+              const SizedBox(height: 80),
+              const Icon(
+                Icons.error_outline,
+                size: 48,
+                color: AppColors.textMuted,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Could not load requests',
+                textAlign: TextAlign.center,
+                style: AppTypography.titleLarge,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '$e',
+                textAlign: TextAlign.center,
+                style: AppTypography.bodySmall
+                    .copyWith(color: AppColors.textMuted),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
