@@ -141,6 +141,12 @@ class FakeChatRepository implements ChatRepository {
   }
 
   @override
+  String? cachedPeerIdForChat(String chatId, String viewerId) {
+    _seedIfNeeded(viewerId);
+    return _index[viewerId]?[chatId]?.peerId;
+  }
+
+  @override
   Stream<List<ChatMessage>> watchMessages(String chatId, {required int limit}) {
     final existing = _msgLimits[chatId] ?? 0;
     if (limit > existing) _msgLimits[chatId] = limit;

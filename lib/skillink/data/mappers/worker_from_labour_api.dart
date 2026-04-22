@@ -57,12 +57,21 @@ Worker workerFromLabourApiJson(Map<String, dynamic> raw) {
     }
   }
 
-  final selectedRaw = json['selectedServices'] as List<dynamic>?;
-  final selectedServices = selectedRaw
-          ?.map(_serviceEntryToId)
-          .where((s) => s.isNotEmpty)
-          .toList() ??
-      const <String>[];
+  final mergedSkillIds = <String>[];
+  void addServiceList(List<dynamic>? list) {
+    if (list == null) return;
+    for (final e in list) {
+      final id = _serviceEntryToId(e);
+      if (id.isEmpty) continue;
+      if (!mergedSkillIds.contains(id)) mergedSkillIds.add(id);
+    }
+  }
+
+  addServiceList(json['selectedServices'] as List<dynamic>?);
+  addServiceList(json['services'] as List<dynamic>?);
+  addServiceList(json['skillTypes'] as List<dynamic>?);
+  addServiceList(json['skills'] as List<dynamic>?);
+  final selectedServices = mergedSkillIds;
 
   final ratings = (json['ratings'] as num?)?.toDouble() ?? 0.0;
   final reviews = (json['reviews'] as num?)?.toInt() ?? 0;

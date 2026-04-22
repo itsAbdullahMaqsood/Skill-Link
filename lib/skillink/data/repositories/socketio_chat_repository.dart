@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:skilllink/models/chat_models.dart' as sc;
 import 'package:skilllink/services/chat/chat_service.dart' as sc;
 import 'package:skilllink/skillink/data/repositories/chat_repository.dart';
@@ -13,6 +14,9 @@ class SocketIoChatRepository implements ChatRepository {
       : _chat = chatService;
 
   final sc.ChatService _chat;
+
+  /// Server room ids do not encode peer role; keep role from the screen that opened the chat.
+  final Map<String, UserRole> _peerRoleHintByRoomId = {};
 
   @override
   Stream<List<ChatSummary>> watchUserChats(String userId) async* {
@@ -36,6 +40,13 @@ class SocketIoChatRepository implements ChatRepository {
   }
 
   @override
+  String? cachedPeerIdForChat(String chatId, String viewerId) {
+    final fromService = _chat.getPeerUserIdForRoom(chatId);
+    if (fromService != null && fromService.isNotEmpty) return fromService;
+    return null;
+  }
+
+  @override
   Future<Result<List<ChatMessage>>> loadMessagesBefore({
     required String chatId,
     required DateTime before,
@@ -53,6 +64,7 @@ class SocketIoChatRepository implements ChatRepository {
         participantAvatar: input.peerAvatar ?? '',
         participantOnline: false,
       );
+      _peerRoleHintByRoomId[roomId] = input.peerRole;
       final summary = ChatSummary(
         chatId: roomId,
         peerId: input.peerId,
@@ -62,8 +74,12 @@ class SocketIoChatRepository implements ChatRepository {
         unreadCount: 0,
       );
       return Success(OpenedChat(chatId: roomId, summary: summary));
-    } on Exception catch (e) {
-      return Failure('Could not open chat.', e);
+    } catch (e, st) {
+      debugPrint('[SocketIoChatRepository] openChat failed: $e\n$st');
+      return Failure(
+        'Could not open chat.',
+        e is Exception ? e : Exception(e.toString()),
+      );
     }
   }
 
@@ -143,7 +159,7 @@ class SocketIoChatRepository implements ChatRepository {
       peerId: p.participantId,
       peerName: p.participantName,
       peerAvatar: p.participantAvatar.isEmpty ? null : p.participantAvatar,
-      peerRole: UserRole.homeowner,
+      peerRole: _peerRoleHintByRoomId[p.id] ?? UserRole.homeowner,
       lastMessagePreview: p.lastMessage.isEmpty ? null : p.lastMessage,
       lastMessageType:
           p.lastMessage.isEmpty ? null : ChatMessageType.text,

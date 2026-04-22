@@ -77,7 +77,11 @@ class ChatThreadViewModel extends StateNotifier<ChatThreadState> {
   String? _resolvePeerId() {
     final me = _myId;
     if (me == null) return null;
-    return peerIdFor(_chatId, me) ?? state.peer?.peerId;
+    if (_chatId.startsWith('c_')) {
+      return peerIdFor(_chatId, me);
+    }
+    return state.peer?.peerId ??
+        _ref.read(chatRepositoryProvider).cachedPeerIdForChat(_chatId, me);
   }
 
   void _bootstrap() {

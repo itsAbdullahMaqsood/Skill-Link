@@ -2,7 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skilllink/skillink/data/providers.dart';
 import 'package:skilllink/skillink/data/repositories/open_job_post_repository.dart';
 import 'package:skilllink/skillink/data/repositories/service_request_repository.dart';
+import 'package:skilllink/skillink/data/services/recent_worker_open_bid_storage.dart';
 import 'package:skilllink/skillink/domain/models/open_job_post_bid.dart';
+import 'package:skilllink/skillink/ui/auth/view_models/auth_view_model.dart';
+import 'package:skilllink/skillink/utils/result.dart';
 
 enum OpenJobPostActionKind {
   none,
@@ -73,6 +76,9 @@ class OpenJobPostActionsController
     required num amount,
     required String currency,
     String? note,
+
+    /// When non-null, persists a recent-bid row for the worker home screen.
+    String? recentBidDescriptionPreview,
   }) async {
     if (state.isBusy) {
       return const SubmitBidOutcome.failure('Another action is in progress.');
@@ -90,20 +96,33 @@ class OpenJobPostActionsController
     if (!mounted) {
       return const SubmitBidOutcome.failure('Cancelled.');
     }
-    return result.when(
-      success: (bid) {
+    switch (result) {
+      case Success(:final value):
+        final bid = value;
         state = state.copyWith(runningAction: OpenJobPostActionKind.none);
+        if (recentBidDescriptionPreview != null) {
+          final uid = ref.read(authViewModelProvider).user?.id;
+          if (uid != null && uid.isNotEmpty) {
+            await RecentWorkerOpenBidStorage.record(
+              workerUserId: uid,
+              postId: postId,
+              description: recentBidDescriptionPreview,
+              amount: bid.amount,
+              currency: bid.currency,
+              status: bid.status,
+            );
+            ref.invalidate(recentLocalWorkerOpenBidsProvider);
+          }
+        }
         _invalidatePost();
         return SubmitBidOutcome.success(bid);
-      },
-      failure: (message, _) {
+      case Failure(:final message):
         state = state.copyWith(
           runningAction: OpenJobPostActionKind.none,
           errorMessage: message,
         );
         return SubmitBidOutcome.failure(message);
-      },
-    );
+    }
   }
 
   Future<SelectBidOutcome> selectBid({required String bidId}) async {

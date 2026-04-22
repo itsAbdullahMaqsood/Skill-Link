@@ -3,12 +3,18 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:skilllink/models/user.dart' as sc;
 import 'package:skilllink/services/auth_service.dart';
+import 'package:skilllink/services/signup_api_service.dart';
 import 'package:skilllink/skillink/data/mappers/review_from_labour_api.dart';
 import 'package:skilllink/skillink/data/mappers/worker_from_labour_api.dart';
 import 'package:skilllink/skillink/data/mappers/worker_from_skillchain_user.dart';
 import 'package:skilllink/skillink/data/model/worker_dto.dart';
+import 'package:skilllink/skillink/data/repositories/job_repository.dart';
+import 'package:skilllink/skillink/data/repositories/service_request_repository.dart'
+    show ServiceRequestRepository, ServiceRequestRole;
 import 'package:skilllink/skillink/data/repositories/worker_repository.dart';
 import 'package:skilllink/skillink/data/services/api_service.dart';
+import 'package:skilllink/skillink/domain/models/job_status.dart';
+import 'package:skilllink/skillink/domain/models/service_request.dart';
 import 'package:skilllink/skillink/domain/models/job.dart';
 import 'package:skilllink/skillink/domain/models/review.dart';
 import 'package:skilllink/skillink/domain/models/worker.dart';
@@ -16,15 +22,40 @@ import 'package:skilllink/skillink/testing/models/sample_reviews.dart';
 import 'package:skilllink/skillink/utils/error_mapper.dart';
 import 'package:skilllink/skillink/utils/result.dart';
 
+List<dynamic> _workersListFromBody(Map<String, dynamic>? body) {
+  if (body == null) return const <dynamic>[];
+  final direct = body['workers'];
+  if (direct is List<dynamic>) return direct;
+  if (direct is List) return List<dynamic>.from(direct);
+  final data = body['data'];
+  if (data is List<dynamic>) return data;
+  if (data is List) return List<dynamic>.from(data);
+  if (data is Map) {
+    final m = Map<String, dynamic>.from(data);
+    for (final key in ['workers', 'items', 'results', 'list']) {
+      final inner = m[key];
+      if (inner is List<dynamic>) return inner;
+      if (inner is List) return List<dynamic>.from(inner);
+    }
+  }
+  return const <dynamic>[];
+}
+
 class RemoteWorkerRepository implements WorkerRepository {
   RemoteWorkerRepository({
     required ApiService apiService,
     AuthService? authService,
+    required JobRepository jobRepository,
+    required ServiceRequestRepository serviceRequestRepository,
   })  : _api = apiService,
-        _auth = authService;
+        _auth = authService,
+        _jobs = jobRepository,
+        _serviceRequests = serviceRequestRepository;
 
   final ApiService _api;
   final AuthService? _auth;
+  final JobRepository _jobs;
+  final ServiceRequestRepository _serviceRequests;
 
   @override
   Future<Result<List<Worker>>> searchWorkers(
@@ -32,26 +63,58 @@ class RemoteWorkerRepository implements WorkerRepository {
   ) async {
     try {
       const limit = 50;
+      // Do not send UI trade slugs as `search` — many backends treat `search`
+      // as name/text filter and return [] when it does not match worker names.
+      // Trade filtering is applied client-side using service IDs + catalog.
       final res = await _api.get<Map<String, dynamic>>(
         '/workers',
         queryParameters: <String, dynamic>{
           'limit': limit,
           'offset': 0,
-          if (filter.trade != null && filter.trade!.trim().isNotEmpty)
-            'search': filter.trade!.trim(),
           if (filter.minRating != null) 'minRating': filter.minRating,
         },
       );
       final body = res.data;
-      final rawList = body == null
-          ? const <dynamic>[]
-          : (body['workers'] is List)
-              ? body['workers']! as List<dynamic>
-              : const <dynamic>[];
+      final rawList = _workersListFromBody(body);
       var workers = rawList
           .cast<Map<String, dynamic>>()
           .map(workerFromLabourApiJson)
           .toList();
+
+      Map<String, String>? idToName = filter.serviceIdToName;
+      if ((idToName == null || idToName.isEmpty) &&
+          filter.trade != null &&
+          filter.trade!.trim().isNotEmpty) {
+        final auth = _auth;
+        if (auth != null) {
+          try {
+            final token = await auth.getAccessToken();
+            if (token != null && token.isNotEmpty) {
+              final items =
+                  await SignupApiService().fetchActiveLabourServices(token);
+              idToName = {for (final s in items) s.id: s.name};
+            }
+          } catch (_) {}
+        }
+      }
+
+      final trade = filter.trade?.trim();
+      if (trade != null && trade.isNotEmpty) {
+        workers = workers
+            .where(
+              (w) => workerMatchesMarketplaceTrade(
+                w,
+                trade,
+                idToName,
+              ),
+            )
+            .toList();
+      }
+
+      if (filter.minRating != null) {
+        workers =
+            workers.where((w) => w.rating >= filter.minRating!).toList();
+      }
 
       switch (filter.sort) {
         case WorkerSort.ratingDesc:
@@ -276,8 +339,41 @@ class RemoteWorkerRepository implements WorkerRepository {
       const Failure('Remote availability toggle not yet implemented.');
 
   @override
-  Future<Result<EarningsSummary>> getEarnings() async =>
-      const Failure('Remote earnings not yet implemented.');
+  Future<Result<EarningsSummary>> getEarnings() async {
+    String? jobListErr;
+    var rawJobs = const <Job>[];
+    final jobsResult = await _jobs.listJobs();
+    jobsResult.when(
+      success: (list) => rawJobs = list,
+      failure: (msg, _) => jobListErr = msg,
+    );
+    String? serviceErr;
+    var rawServiceRequests = const <ServiceRequest>[];
+    final srResult = await _serviceRequests.listMyRequests(
+      role: ServiceRequestRole.worker,
+    );
+    srResult.when(
+      success: (list) => rawServiceRequests = list,
+      failure: (msg, _) => serviceErr = msg,
+    );
+
+    if (jobListErr != null && serviceErr != null) {
+      return Failure('Could not load earnings: $jobListErr');
+    }
+
+    final completedJobs = rawJobs
+        .where((j) => j.status == JobStatus.completed)
+        .toList();
+    final completedServiceRequests = rawServiceRequests
+        .where((r) => r.status == ServiceRequestStatus.completed)
+        .toList();
+    return Success(
+      buildEarningsSummaryFromWork(
+        completedJobs: completedJobs,
+        completedServiceRequests: completedServiceRequests,
+      ),
+    );
+  }
 
   @override
   Future<Result<List<Job>>> getIncomingJobs() async =>

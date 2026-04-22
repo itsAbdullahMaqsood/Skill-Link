@@ -49,19 +49,48 @@ class WorkerIncomingRequestsScreen extends ConsumerWidget {
                 ],
               );
             }
-            return ListView.separated(
+            final ongoing =
+                items.where((r) => r.showsAsWorkerOngoingJob).toList();
+            final rest =
+                items.where((r) => !r.showsAsWorkerOngoingJob).toList();
+
+            return ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),
-              itemCount: items.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 10),
-              itemBuilder: (_, i) {
-                final req = items[i];
-                return SentRequestTile(
-                  request: req,
-                  onTap: () => context
-                      .push(Routes.receivedRequestDetail(req.id)),
-                );
-              },
+              children: [
+                if (ongoing.isNotEmpty) ...[
+                  Text(
+                    'In progress',
+                    style: AppTypography.titleLarge,
+                  ),
+                  const SizedBox(height: 10),
+                  for (var i = 0; i < ongoing.length; i++) ...[
+                    SentRequestTile(
+                      request: ongoing[i],
+                      onTap: () => context.push(
+                        Routes.receivedRequestDetail(ongoing[i].id),
+                      ),
+                    ),
+                    if (i < ongoing.length - 1) const SizedBox(height: 10),
+                  ],
+                  const SizedBox(height: 20),
+                ],
+                if (rest.isNotEmpty && ongoing.isNotEmpty)
+                  Text(
+                    'Other requests',
+                    style: AppTypography.titleLarge,
+                  ),
+                if (rest.isNotEmpty && ongoing.isNotEmpty)
+                  const SizedBox(height: 10),
+                for (var i = 0; i < rest.length; i++) ...[
+                  SentRequestTile(
+                    request: rest[i],
+                    onTap: () => context
+                        .push(Routes.receivedRequestDetail(rest[i].id)),
+                  ),
+                  if (i < rest.length - 1) const SizedBox(height: 10),
+                ],
+              ],
             );
           },
           loading: () => ListView(

@@ -68,6 +68,12 @@ class AppConstants {
   static const Duration postedJobETARefreshInterval = Duration(minutes: 2);
   static const double completionAmountDiscrepancyThreshold = 0.10;
 
+  /// Homeowner app never ran [openReport] (worker did on their device). Only
+  /// auto-create a local completion row for completed requests updated within
+  /// this window so we do not prompt on cold start for ancient history.
+  static const Duration completionPromptRecentCompletionMaxAge =
+      Duration(hours: 72);
+
   static const String completionReportsRoot = 'completion_reports';
 
   static const String completionFlagAmountDiscrepancy = 'amount_discrepancy';

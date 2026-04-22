@@ -9,6 +9,7 @@ import 'package:skilllink/services/api_service.dart';
 import 'package:skilllink/services/auth_service.dart';
 import 'package:skilllink/services/chat/chat_service.dart';
 import 'package:skilllink/skillink/data/providers.dart';
+import 'package:skilllink/skillink/routing/completion_prompt_binding.dart';
 import 'package:skilllink/skillink/routing/fcm_binding.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_theme.dart'
     as labour_theme;
@@ -52,6 +53,7 @@ class SkillChainApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(fcmBindingProvider);
+    ref.watch(completionPromptBindingProvider);
 
     final router = ref.watch(appRouterProvider);
 

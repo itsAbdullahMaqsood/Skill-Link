@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 
-import 'package:skilllink/services/api_service.dart';
+import 'package:skilllink/skillink/config/app_constants.dart';
 
 class SkillinkApiService {
   SkillinkApiService._();
@@ -17,7 +17,7 @@ class SkillinkApiService {
   Dio _createDio() {
     final dio = Dio(
       BaseOptions(
-        baseUrl: ApiService.skillinkBaseUrl,
+        baseUrl: AppConstants.apiBaseUrl,
         connectTimeout: const Duration(seconds: 30),
         receiveTimeout: const Duration(seconds: 30),
         headers: {

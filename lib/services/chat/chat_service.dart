@@ -9,6 +9,7 @@ import 'package:skilllink/models/chat_models.dart';
 import 'package:skilllink/services/api_service.dart';
 import 'package:skilllink/services/auth_service.dart';
 import 'package:skilllink/services/skillink_api_service.dart';
+import 'package:skilllink/skillink/config/app_constants.dart';
 
 class ChatService {
   ChatService._();
@@ -123,6 +124,18 @@ class ChatService {
   String? getBackendTicketId(String conversationId) {
     final ticketId = _ticketIdByConversation[conversationId];
     return ticketId?.toString();
+  }
+
+  /// Other participant for a server-issued room id (SkillChain / SkillLink socket API).
+  /// Deterministic `c_*` chat ids from tests do not use this path.
+  String? getPeerUserIdForRoom(String roomId) {
+    final r = roomId.trim();
+    if (r.isEmpty) return null;
+    final fromMap = _otherUserIdByRoom[r]?.trim();
+    if (fromMap != null && fromMap.isNotEmpty) return fromMap;
+    final fromPreview = _conversationsById[r]?.participantId.trim();
+    if (fromPreview != null && fromPreview.isNotEmpty) return fromPreview;
+    return null;
   }
 
   Future<void> refreshInbox() => _refreshInboxFromServer();
@@ -724,7 +737,7 @@ class ChatService {
 
   Future<String> _chatSocketBaseUrl() async {
     if (await _labourChat()) {
-      return ApiService.skillinkBaseUrl.trim();
+      return AppConstants.apiBaseUrl.trim();
     }
     return ApiService.baseUrl.trim();
   }

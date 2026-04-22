@@ -18,9 +18,7 @@ class FakeJobRepository implements JobRepository {
         _jobs = {
           for (final j in (seed ??
               [
-                SampleJobs.activeJob,
                 ...SampleJobs.recentJobs,
-                ...SampleJobs.incomingWorkerOffers(DateTime.now()),
                 if (AppConstants.seedDemoCompletionReport)
                   SampleJobs.demoCompletedAwaitingReport,
               ]))

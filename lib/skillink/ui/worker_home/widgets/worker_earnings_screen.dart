@@ -4,6 +4,7 @@ import 'package:skilllink/skillink/data/repositories/worker_repository.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_colors.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_typography.dart';
 import 'package:skilllink/skillink/ui/core/ui/empty_state.dart';
+import 'package:skilllink/skillink/ui/core/ui/error_view.dart';
 import 'package:skilllink/skillink/ui/core/ui/loading_shimmer.dart';
 import 'package:skilllink/skillink/ui/worker_home/view_models/worker_earnings_view_model.dart';
 import 'package:skilllink/skillink/utils/text_format.dart';
@@ -29,11 +30,32 @@ class WorkerEarningsScreen extends ConsumerWidget {
               padding: EdgeInsets.all(16),
               child: LoadingShimmer(height: 200),
             )
+          : state.errorMessage != null
+              ? ErrorView(
+                  message: state.errorMessage!,
+                  onRetry: vm.refresh,
+                )
           : state.summary == null
               ? const EmptyState(
                   icon: Icons.account_balance_wallet_outlined,
                   title: 'No earnings yet',
                   subtitle: 'Complete a job to see your earnings here.',
+                )
+          : (state.summary!.totalNet == 0 &&
+                  state.summary!.completedJobs.isEmpty)
+              ? RefreshIndicator(
+                  onRefresh: vm.refresh,
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: const [
+                      SizedBox(height: 80),
+                      EmptyState(
+                        icon: Icons.account_balance_wallet_outlined,
+                        title: 'No earnings yet',
+                        subtitle: 'Complete a job to see your earnings here.',
+                      ),
+                    ],
+                  ),
                 )
               : RefreshIndicator(
                   onRefresh: vm.refresh,
@@ -67,19 +89,19 @@ class _Content extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'This Month',
+                'Total earned (all time)',
                 style: AppTypography.bodyMedium
                     .copyWith(color: Colors.white70),
               ),
               const SizedBox(height: 8),
               Text(
-                'PKR ${summary.thisMonthNet.toStringAsFixed(0)}',
+                'PKR ${summary.totalNet.toStringAsFixed(0)}',
                 style: AppTypography.headlineLarge
                     .copyWith(color: Colors.white, fontSize: 32),
               ),
               const SizedBox(height: 4),
               Text(
-                'Net earnings after 10% fee',
+                'Net after 10% platform fee',
                 style: AppTypography.bodySmall
                     .copyWith(color: Colors.white60),
               ),
@@ -88,15 +110,25 @@ class _Content extends StatelessWidget {
                 children: [
                   _StatPill(
                     label: 'Gross',
-                    value: 'PKR ${summary.thisMonthGross.toStringAsFixed(0)}',
+                    value: 'PKR ${summary.totalGross.toStringAsFixed(0)}',
                   ),
                   const SizedBox(width: 10),
                   _StatPill(
                     label: 'Fee',
-                    value: 'PKR ${summary.thisMonthFee.toStringAsFixed(0)}',
+                    value: 'PKR ${summary.totalFee.toStringAsFixed(0)}',
                   ),
                 ],
               ),
+              if (summary.thisMonthNet > 0 ||
+                  summary.thisMonthGross > 0) ...[
+                const SizedBox(height: 14),
+                Text(
+                  'This month: net PKR ${summary.thisMonthNet.toStringAsFixed(0)} '
+                  '(gross ${summary.thisMonthGross.toStringAsFixed(0)})',
+                  style: AppTypography.bodySmall
+                      .copyWith(color: Colors.white60),
+                ),
+              ],
             ],
           ),
         ),
@@ -108,8 +140,8 @@ class _Content extends StatelessWidget {
         if (summary.completedJobs.isEmpty)
           const EmptyState(
             icon: Icons.work_off_outlined,
-            title: 'No jobs this month',
-            subtitle: 'Completed jobs will appear here.',
+            title: 'No completed jobs',
+            subtitle: 'When you finish a job, it will show here with the amount.',
           )
         else
           for (final job in summary.completedJobs) ...[
@@ -204,9 +236,14 @@ class _EarningsRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                'PKR ${job.net.toStringAsFixed(0)}',
+                'Net PKR ${job.net.toStringAsFixed(0)}',
                 style: AppTypography.titleLarge
                     .copyWith(color: AppColors.success),
+              ),
+              Text(
+                'Gross ${job.gross.toStringAsFixed(0)} · fee ${job.fee.toStringAsFixed(0)}',
+                style: AppTypography.bodySmall
+                    .copyWith(color: AppColors.textMuted, fontSize: 11),
               ),
               const SizedBox(height: 2),
               Container(

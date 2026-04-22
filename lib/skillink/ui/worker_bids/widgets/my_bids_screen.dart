@@ -18,61 +18,32 @@ class MyBidsScreen extends ConsumerWidget {
     final async =
         ref.watch(myOpenJobPostsProvider(ServiceRequestRole.worker));
 
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
         backgroundColor: AppColors.background,
-        appBar: AppBar(
-          backgroundColor: AppColors.background,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          title: Text('My Bids', style: AppTypography.headlineMedium),
-          bottom: const TabBar(
-            isScrollable: true,
-            tabs: [
-              Tab(text: 'Active'),
-              Tab(text: 'Won'),
-              Tab(text: 'Closed'),
-            ],
-          ),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        title: Text('My Bids', style: AppTypography.headlineMedium),
+      ),
+      body: RefreshIndicator(
+        onRefresh: () => ref.refresh(
+          myOpenJobPostsProvider(ServiceRequestRole.worker).future,
         ),
-        body: RefreshIndicator(
-          onRefresh: () => ref.refresh(
-            myOpenJobPostsProvider(ServiceRequestRole.worker).future,
+        child: async.when(
+          data: (posts) => _PostedList(
+            posts: posts
+                .where((p) => p.status == OpenJobPostStatus.openForBids)
+                .toList(),
           ),
-          child: async.when(
-            data: (posts) => TabBarView(
-              children: [
-                _PostedList(
-                  posts: posts
-                      .where((p) => p.status == OpenJobPostStatus.openForBids)
-                      .toList(),
-                ),
-                _PostedList(
-                  posts: posts
-                      .where((p) =>
-                          (p.status == OpenJobPostStatus.workerSelected ||
-                              p.status == OpenJobPostStatus.awarded))
-                      .toList(),
-                ),
-                _PostedList(
-                  posts: posts
-                      .where((p) =>
-                          p.status == OpenJobPostStatus.cancelled ||
-                          p.status == OpenJobPostStatus.closed)
-                      .toList(),
-                ),
-              ],
-            ),
-            loading: () => const LoadingShimmerList(),
-            error: (e, _) => Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  ErrorMapper.fromException(e),
-                  style: AppTypography.bodyMedium,
-                  textAlign: TextAlign.center,
-                ),
+          loading: () => const LoadingShimmerList(),
+          error: (e, _) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                ErrorMapper.fromException(e),
+                style: AppTypography.bodyMedium,
+                textAlign: TextAlign.center,
               ),
             ),
           ),
@@ -97,7 +68,7 @@ class _PostedList extends StatelessWidget {
           EmptyState(
             icon: Icons.gavel_outlined,
             title: 'Nothing here',
-            subtitle: 'Your bids in this tab will show up here.',
+            subtitle: 'Open jobs you bid on will show up here.',
           ),
         ],
       );

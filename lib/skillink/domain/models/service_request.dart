@@ -318,6 +318,16 @@ class ServiceRequest {
       status == ServiceRequestStatus.completed ||
       status == ServiceRequestStatus.cancelled;
 
+  /// Direct bookings / negotiation: worker should treat these as an active job
+  /// (e.g. after the homeowner accepts the worker's bid, or after mutual accept).
+  bool get showsAsWorkerOngoingJob =>
+      !isTerminal &&
+      (status == ServiceRequestStatus.workerAccepted ||
+          status == ServiceRequestStatus.bidAccepted ||
+          status == ServiceRequestStatus.onTheWay ||
+          status == ServiceRequestStatus.arrived ||
+          status == ServiceRequestStatus.inProgress);
+
   factory ServiceRequest.fromJson(Map<String, dynamic> json) {
     final root = json['serviceRequest'] is Map<String, dynamic>
         ? json['serviceRequest'] as Map<String, dynamic>

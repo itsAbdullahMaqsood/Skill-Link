@@ -1,5 +1,4 @@
 import 'package:skilllink/services/auth_service.dart';
-import 'package:skilllink/skillink/config/app_constants.dart';
 import 'package:skilllink/skillink/data/mappers/worker_from_skillchain_user.dart';
 import 'package:skilllink/skillink/data/repositories/worker_repository.dart';
 import 'package:skilllink/skillink/domain/models/job.dart';
@@ -30,10 +29,15 @@ class FakeWorkerRepository implements WorkerRepository {
 
     var results = SampleWorkers.all.toList();
 
-    if (filter.trade != null && filter.trade!.isNotEmpty) {
-      final needle = filter.trade!.toLowerCase();
+    if (filter.trade != null && filter.trade!.trim().isNotEmpty) {
       results = results
-          .where((w) => w.skillTypes.any((s) => s.toLowerCase() == needle))
+          .where(
+            (w) => workerMatchesMarketplaceTrade(
+              w,
+              filter.trade!,
+              filter.serviceIdToName,
+            ),
+          )
           .toList();
     }
 
@@ -41,10 +45,11 @@ class FakeWorkerRepository implements WorkerRepository {
       results = results.where((w) => w.rating >= filter.minRating!).toList();
     }
 
-    final radius = filter.radiusKm ?? AppConstants.searchResultMaxDistance;
-    results = results
-        .where((w) => (w.distanceKm ?? double.infinity) <= radius)
-        .toList();
+    if (filter.radiusKm != null) {
+      results = results
+          .where((w) => (w.distanceKm ?? double.infinity) <= filter.radiusKm!)
+          .toList();
+    }
 
     switch (filter.sort) {
       case WorkerSort.ratingDesc:
@@ -138,54 +143,22 @@ class FakeWorkerRepository implements WorkerRepository {
   @override
   Future<Result<EarningsSummary>> getEarnings() async {
     await Future<void>.delayed(_latency);
-    final jobs = _seedEarningsJobs();
-    final gross = jobs.fold<double>(0, (s, j) => s + j.gross);
-    final fee = jobs.fold<double>(0, (s, j) => s + j.fee);
-    return Success(EarningsSummary(
-      thisMonthGross: gross,
-      thisMonthFee: fee,
-      thisMonthNet: gross - fee,
-      completedJobs: jobs,
-    ));
+    return const Success(
+      EarningsSummary(
+        totalGross: 0,
+        totalFee: 0,
+        totalNet: 0,
+        thisMonthGross: 0,
+        thisMonthFee: 0,
+        thisMonthNet: 0,
+        completedJobs: [],
+      ),
+    );
   }
 
   @override
   Future<Result<List<Job>>> getIncomingJobs() async {
     await Future<void>.delayed(_latency);
     return Success(SampleJobs.incomingWorkerOffers(DateTime.now()));
-  }
-
-
-  static List<EarningsJob> _seedEarningsJobs() {
-    final now = DateTime.now();
-    return [
-      EarningsJob(
-        jobId: 'job_past_1',
-        serviceType: 'electrician',
-        gross: 1800,
-        fee: 180,
-        net: 1620,
-        completedAt: now.subtract(const Duration(days: 4)),
-        paid: true,
-      ),
-      EarningsJob(
-        jobId: 'job_past_4',
-        serviceType: 'electrician',
-        gross: 2200,
-        fee: 220,
-        net: 1980,
-        completedAt: now.subtract(const Duration(days: 8)),
-        paid: true,
-      ),
-      EarningsJob(
-        jobId: 'job_past_5',
-        serviceType: 'electrician',
-        gross: 900,
-        fee: 90,
-        net: 810,
-        completedAt: now.subtract(const Duration(days: 15)),
-        paid: false,
-      ),
-    ];
   }
 }

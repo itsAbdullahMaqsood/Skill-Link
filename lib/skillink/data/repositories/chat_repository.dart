@@ -39,6 +39,9 @@ class OpenedChat {
 abstract class ChatRepository {
   Stream<List<ChatSummary>> watchUserChats(String userId);
 
+  /// For server room ids: peer id cached on this device / in the active chat session.
+  String? cachedPeerIdForChat(String chatId, String viewerId);
+
   Stream<List<ChatMessage>> watchMessages(String chatId, {required int limit});
 
   Future<Result<List<ChatMessage>>> loadMessagesBefore({

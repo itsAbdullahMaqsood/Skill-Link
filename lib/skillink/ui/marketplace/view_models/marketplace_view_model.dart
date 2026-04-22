@@ -39,7 +39,14 @@ class MarketplaceViewModel extends StateNotifier<MarketplaceState> {
           .copyWithPrevious(state.workers),
     );
     final repo = _ref.read(workerRepositoryProvider);
-    final result = await repo.searchWorkers(state.filter);
+    Map<String, String> serviceMap = const {};
+    try {
+      serviceMap = await _ref.read(labourServiceIdToNameProvider.future);
+    } catch (_) {}
+    final filter = state.filter.copyWith(
+      serviceIdToName: serviceMap.isEmpty ? null : serviceMap,
+    );
+    final result = await repo.searchWorkers(filter);
     if (!mounted) return;
     result.when(
       success: (workers) => state = state.copyWith(

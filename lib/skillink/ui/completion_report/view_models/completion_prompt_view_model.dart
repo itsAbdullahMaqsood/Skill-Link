@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skilllink/skillink/data/providers.dart';
 import 'package:skilllink/skillink/data/repositories/completion_report_repository.dart';
+import 'package:skilllink/skillink/domain/logic/job_completion_prompt_mapper.dart';
 import 'package:skilllink/skillink/domain/models/completion_report.dart';
 import 'package:skilllink/skillink/domain/models/job.dart';
 import 'package:skilllink/skillink/domain/models/user_role.dart';
@@ -82,13 +83,21 @@ class CompletionPromptViewModel extends StateNotifier<CompletionPromptState> {
     final jobs = _ref.read(jobRepositoryProvider);
     final jobResult = await jobs.getJob(_jobId);
     if (!mounted) return;
-    final job = jobResult.valueOrNull;
+    Job? job = jobResult.valueOrNull;
     if (job == null) {
-      state = state.copyWith(
-        bootstrapping: false,
-        errorMessage: 'Could not find this job.',
-      );
-      return;
+      final srResult = await _ref
+          .read(serviceRequestRepositoryProvider)
+          .getServiceRequest(_jobId);
+      if (!mounted) return;
+      final sr = srResult.valueOrNull;
+      if (sr == null) {
+        state = state.copyWith(
+          bootstrapping: false,
+          errorMessage: 'Could not find this job.',
+        );
+        return;
+      }
+      job = jobForCompletionPrompt(sr);
     }
 
     await _repo.openReport(jobId: _jobId, createdAt: DateTime.now());

@@ -156,6 +156,7 @@ class _OpenJobPostBidSheetState extends ConsumerState<OpenJobPostBidSheet> {
                         amount: parsed,
                         currency: 'PKR',
                         note: _noteCtrl.text,
+                        recentBidDescriptionPreview: widget.post.description,
                       );
                       if (!context.mounted) return;
                       if (!outcome.isSuccess) return;

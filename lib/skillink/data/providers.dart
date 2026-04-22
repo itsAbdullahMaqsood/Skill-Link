@@ -30,6 +30,7 @@ import 'package:skilllink/skillink/data/repositories/skillchain_auth_repository.
 import 'package:skilllink/skillink/data/repositories/socketio_chat_repository.dart';
 import 'package:skilllink/skillink/data/repositories/worker_repository.dart';
 import 'package:skilllink/skillink/data/services/api_service.dart';
+import 'package:skilllink/skillink/data/services/recent_worker_open_bid_storage.dart';
 import 'package:skilllink/skillink/data/services/fcm_service.dart';
 import 'package:skilllink/skillink/data/services/local_notifications_service.dart';
 import 'package:skilllink/skillink/data/services/maps_distance_service.dart';
@@ -38,7 +39,7 @@ import 'package:skilllink/skillink/testing/fakes/fake_ai_repository.dart';
 import 'package:skilllink/skillink/testing/fakes/fake_anomaly_repository.dart';
 import 'package:skilllink/skillink/testing/fakes/fake_auth_repository.dart';
 import 'package:skilllink/skillink/testing/fakes/fake_chat_repository.dart';
-import 'package:skilllink/skillink/testing/fakes/fake_completion_report_repository.dart';
+import 'package:skilllink/skillink/data/repositories/unified_completion_report_repository.dart';
 import 'package:skilllink/skillink/testing/fakes/fake_iot_repository.dart';
 import 'package:skilllink/skillink/testing/fakes/fake_job_repository.dart';
 import 'package:skilllink/skillink/testing/fakes/fake_posted_jobs_hub.dart';
@@ -46,6 +47,11 @@ import 'package:skilllink/skillink/testing/fakes/fake_worker_repository.dart';
 import 'package:skilllink/skillink/ui/auth/view_models/auth_view_model.dart';
 
 const kUseFakeRepositories = true;
+
+/// When `false`, labour chat uses the same `ChatService` stack as SkillChain
+/// (REST + Socket.IO on the labour backend). `kUseFakeRepositories` does **not**
+/// affect chat so IoT/jobs can stay on fakes while chat hits the real API.
+const kUseFakeChatRepository = false;
 
 const kUseFakeWorkerRepository = false;
 const kUseFakeAuthRepository = false;
@@ -144,6 +150,8 @@ final workerRepositoryProvider = Provider<WorkerRepository>((ref) {
   return RemoteWorkerRepository(
     apiService: ref.watch(apiServiceProvider),
     authService: ref.watch(skillChainAuthServiceProvider),
+    jobRepository: ref.watch(jobRepositoryProvider),
+    serviceRequestRepository: ref.watch(serviceRequestRepositoryProvider),
   );
 });
 
@@ -177,6 +185,16 @@ final myOpenJobPostsProvider = FutureProvider.autoDispose
     success: (list) => list,
     failure: (message, _) => throw Exception(message),
   );
+});
+
+/// Open-job bids recorded on-device after a successful submit/update (see
+/// [RecentWorkerOpenBidStorage]). Used to populate worker home "Recent bids"
+/// when API posts are no longer `openForBids`.
+final recentLocalWorkerOpenBidsProvider =
+    FutureProvider.autoDispose<List<LocalRecentOpenJobBid>>((ref) async {
+  final uid = ref.watch(authViewModelProvider).user?.id;
+  if (uid == null || uid.isEmpty) return const [];
+  return RecentWorkerOpenBidStorage.load(uid);
 });
 
 final discoverOpenJobPostsProvider =
@@ -271,7 +289,7 @@ final aiRepositoryProvider = Provider<AiRepository>((ref) {
 });
 
 final chatRepositoryProvider = Provider<ChatRepository>((ref) {
-  if (kUseFakeRepositories) {
+  if (kUseFakeChatRepository) {
     final fake = FakeChatRepository();
     ref.onDispose(fake.dispose);
     return fake;
@@ -285,15 +303,10 @@ final currentChatIdProvider = StateProvider<String?>((ref) => null);
 
 final completionReportRepositoryProvider =
     Provider<CompletionReportRepository>((ref) {
-  if (kUseFakeRepositories) {
-    final fake = FakeCompletionReportRepository(
-      jobRepository: ref.watch(jobRepositoryProvider),
-    );
-    ref.onDispose(fake.dispose);
-    return fake;
-  }
-  throw UnimplementedError(
-    'A real CompletionReportRepository is not yet wired to the new SkillLink '
-    'backend.',
+  final repo = UnifiedCompletionReportRepository(
+    jobRepository: ref.watch(jobRepositoryProvider),
+    serviceRequestRepository: ref.watch(serviceRequestRepositoryProvider),
   );
+  ref.onDispose(repo.dispose);
+  return repo;
 });

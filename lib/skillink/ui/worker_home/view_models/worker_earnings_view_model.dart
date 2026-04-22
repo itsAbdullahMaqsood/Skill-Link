@@ -43,8 +43,11 @@ class WorkerEarningsViewModel extends StateNotifier<WorkerEarningsState> {
     if (!mounted) return;
     res.when(
       success: (s) => state = state.copyWith(isLoading: false, summary: s),
-      failure: (msg, _) =>
-          state = state.copyWith(isLoading: false, errorMessage: msg),
+      failure: (msg, _) => state = WorkerEarningsState(
+        isLoading: false,
+        summary: null,
+        errorMessage: msg,
+      ),
     );
   }
 }

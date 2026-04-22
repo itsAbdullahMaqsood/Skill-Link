@@ -9,6 +9,7 @@ import 'package:skilllink/models/signup_models.dart';
 import 'package:skilllink/models/user.dart';
 import 'package:skilllink/services/api_service.dart';
 import 'package:skilllink/services/skillink_api_service.dart';
+import 'package:skilllink/skillink/config/app_constants.dart';
 import 'package:skilllink/skillink/data/repositories/skillchain_auth_repository.dart'
     show kLabourRolePrefKey;
 
@@ -252,8 +253,7 @@ class AuthService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
-    } catch (_) {
-    }
+    } catch (_) {}
     bumpAuthChange();
   }
 
@@ -284,7 +284,7 @@ class AuthService {
     if (labourBackend) {
       SkillinkApiService.instance.setAuthToken(accessToken);
       _apiService.setAuthToken(null);
-      ApiService.activeAssetBaseUrl = ApiService.skillinkBaseUrl;
+      ApiService.activeAssetBaseUrl = AppConstants.apiBaseUrl;
     } else {
       _apiService.setAuthToken(accessToken);
       SkillinkApiService.instance.setAuthToken(null);
@@ -316,7 +316,7 @@ class AuthService {
     if (labourBackend) {
       SkillinkApiService.instance.setAuthToken(response.accessToken);
       _apiService.setAuthToken(null);
-      ApiService.activeAssetBaseUrl = ApiService.skillinkBaseUrl;
+      ApiService.activeAssetBaseUrl = AppConstants.apiBaseUrl;
       await _syncLabourRolePrefFrom(userMap);
     } else {
       _apiService.setAuthToken(response.accessToken);
@@ -344,7 +344,7 @@ class AuthService {
     if (labourBackend) {
       SkillinkApiService.instance.setAuthToken(response.accessToken);
       _apiService.setAuthToken(null);
-      ApiService.activeAssetBaseUrl = ApiService.skillinkBaseUrl;
+      ApiService.activeAssetBaseUrl = AppConstants.apiBaseUrl;
       await _syncLabourRolePrefFrom(userMap);
     } else {
       _apiService.setAuthToken(response.accessToken);
@@ -378,8 +378,7 @@ class AuthService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(kLabourRolePrefKey, role);
-    } catch (_) {
-    }
+    } catch (_) {}
   }
 
   Future<void> initializeAuth() async {
@@ -389,7 +388,7 @@ class AuthService {
       if (labour) {
         SkillinkApiService.instance.setAuthToken(token);
         _apiService.setAuthToken(null);
-        ApiService.activeAssetBaseUrl = ApiService.skillinkBaseUrl;
+        ApiService.activeAssetBaseUrl = AppConstants.apiBaseUrl;
       } else {
         _apiService.setAuthToken(token);
         SkillinkApiService.instance.setAuthToken(null);
