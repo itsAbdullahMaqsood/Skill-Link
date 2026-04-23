@@ -1,8 +1,20 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skilllink/skillink/data/providers.dart';
+import 'package:skilllink/skillink/data/repositories/worker_repository.dart';
 import 'package:skilllink/skillink/domain/models/ai_message.dart';
 import 'package:skilllink/skillink/testing/fakes/fake_ai_repository.dart';
+
+/// When the user asks to show/suggest a worker, skip the chatbot backend and
+/// surface a single worker from [WorkerRepository.searchWorkers] (GET /workers).
+bool _messageTriggersLocalWorkerCard(String text) {
+  final hasWorker = RegExp(r'\bworkers?\b', caseSensitive: false).hasMatch(text);
+  if (!hasWorker) return false;
+  final hasShow = RegExp(r'\bshow\b', caseSensitive: false).hasMatch(text);
+  final hasSuggest =
+      RegExp(r'\bsuggest\w*\b', caseSensitive: false).hasMatch(text);
+  return hasShow || hasSuggest;
+}
 
 class AiChatState {
   const AiChatState({
@@ -105,6 +117,42 @@ class AiChatViewModel extends StateNotifier<AiChatState> {
       clearError: true,
       clearFailedMessageId: true,
     );
+
+    if (_messageTriggersLocalWorkerCard(trimmed)) {
+      final workersResult = await _ref
+          .read(workerRepositoryProvider)
+          .searchWorkers(const WorkerSearchFilter());
+      if (!mounted) return;
+      workersResult.when(
+        success: (workers) {
+          final replyAt = DateTime.now();
+          final picked = workers.isEmpty ? null : workers.first;
+          final aiMessage = AiMessage(
+            id: 'ai_local_${replyAt.millisecondsSinceEpoch}',
+            role: AiMessageRole.ai,
+            content: picked == null
+                ? 'No workers are available to show right now.'
+                : '',
+            createdAt: replyAt,
+            recommendedWorker: picked,
+          );
+          state = state.copyWith(
+            messages: [...state.messages, aiMessage],
+            isTyping: false,
+            clearError: true,
+            clearFailedMessageId: true,
+          );
+        },
+        failure: (message, _) {
+          state = state.copyWith(
+            isTyping: false,
+            errorMessage: message,
+            failedMessageId: userMsg.id,
+          );
+        },
+      );
+      return;
+    }
 
     final repo = _ref.read(aiRepositoryProvider);
     final result = await repo.sendMessage(

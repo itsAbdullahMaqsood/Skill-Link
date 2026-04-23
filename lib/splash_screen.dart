@@ -152,7 +152,6 @@ class _TheMostedSplashScreenState extends ConsumerState<TheMostedSplashScreen>
     super.dispose();
   }
 
-
   Future<void> _pick(String type) async {
     await router.setSkillType(ref, type);
     if (!mounted) return;
@@ -162,7 +161,6 @@ class _TheMostedSplashScreenState extends ConsumerState<TheMostedSplashScreen>
       context.push(Routes.login);
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -235,7 +233,6 @@ class _TheMostedSplashScreenState extends ConsumerState<TheMostedSplashScreen>
     );
   }
 }
-
 
 class _MosaicGrid extends StatelessWidget {
   final int cols;
@@ -316,7 +313,6 @@ class _MosaicGrid extends StatelessWidget {
   }
 }
 
-
 class _AnimatedTile extends StatelessWidget {
   final Animation<double> anim;
   final Color baseColor;
@@ -379,7 +375,6 @@ class _AnimatedTile extends StatelessWidget {
   }
 }
 
-
 class _LogoWidget extends StatelessWidget {
   const _LogoWidget();
 
@@ -432,7 +427,6 @@ class _LogoWidget extends StatelessWidget {
     );
   }
 }
-
 
 class _LoaderBar extends StatelessWidget {
   const _LoaderBar({required this.progress});
@@ -494,7 +488,7 @@ class _LoaderBar extends StatelessWidget {
                     return FractionallySizedBox(
                       alignment: Alignment.centerLeft,
                       widthFactor: progress.value.clamp(0.0, 1.0),
-                        child: DecoratedBox(
+                      child: DecoratedBox(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: [
@@ -515,7 +509,6 @@ class _LoaderBar extends StatelessWidget {
     );
   }
 }
-
 
 class _SkillTypeOverlay extends StatelessWidget {
   const _SkillTypeOverlay({required this.onPick});
@@ -558,7 +551,7 @@ class _SkillTypeOverlay extends StatelessWidget {
             const SizedBox(height: 20),
             _SkillCard(
               icon: Icons.laptop_chromebook_rounded,
-              accent: Colors.blue.shade700,
+              accent: AppColors.primary,
               title: 'Digital Skills',
               subtitle:
                   'Exchange digital skills — design, development, writing, '

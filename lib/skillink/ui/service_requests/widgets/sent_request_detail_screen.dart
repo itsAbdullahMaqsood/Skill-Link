@@ -3,11 +3,14 @@ import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:skilllink/skillink/config/app_constants.dart';
 import 'package:skilllink/skillink/data/providers.dart';
 import 'package:skilllink/skillink/domain/logic/service_request_actions.dart';
 import 'package:skilllink/skillink/domain/models/service_request.dart';
+import 'package:skilllink/skillink/routing/routes.dart';
 import 'package:skilllink/skillink/ui/auth/view_models/auth_view_model.dart';
+import 'package:skilllink/skillink/ui/completion_report/view_models/pending_completion_reports_view_model.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_colors.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_typography.dart';
 import 'package:skilllink/skillink/ui/core/ui/loading_shimmer.dart';
@@ -181,14 +184,81 @@ class _ErrorView extends StatelessWidget {
   }
 }
 
+bool _showCustomerCompletionNudge(
+  WidgetRef ref,
+  ServiceRequest request,
+  ServiceRequestViewer viewer,
+) {
+  if (viewer != ServiceRequestViewer.customer) return false;
+  if (request.status != ServiceRequestStatus.completed) return false;
+  return !ref.watch(acknowledgedCompletionReportsProvider).contains(request.id);
+}
 
-class _DetailBody extends StatelessWidget {
+class _CustomerCompletionNudgeCard extends ConsumerWidget {
+  const _CustomerCompletionNudgeCard({required this.requestId});
+
+  final String requestId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppColors.primary.withValues(alpha: 0.35),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Job completed', style: AppTypography.titleLarge),
+              const SizedBox(height: 6),
+              Text(
+                'Optionally report how much you paid. This helps if there is a '
+                'payment dispute later.',
+                style: AppTypography.bodySmall
+                    .copyWith(color: AppColors.textMuted),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  TextButton(
+                    onPressed: () {
+                      ref
+                          .read(acknowledgedCompletionReportsProvider.notifier)
+                          .acknowledge(requestId);
+                    },
+                    child: const Text('Dismiss'),
+                  ),
+                  const Spacer(),
+                  FilledButton(
+                    onPressed: () =>
+                        context.push(Routes.completionPrompt(requestId)),
+                    child: const Text('Report amount'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DetailBody extends ConsumerWidget {
   const _DetailBody({required this.request, required this.viewer});
   final ServiceRequest request;
   final ServiceRequestViewer viewer;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final hasNegotiation =
         request.negotiationOffers.isNotEmpty || request.acceptedBid != null;
 
@@ -203,6 +273,9 @@ class _DetailBody extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
       children: [
         _HeaderCard(request: request),
+        if (_showCustomerCompletionNudge(ref, request, viewer)) ...[
+          _CustomerCompletionNudgeCard(requestId: request.id),
+        ],
         if (request.cancelled) ...[
           const SizedBox(height: 12),
           _CancelledBanner(cancelledAt: request.updatedAt),
@@ -1202,6 +1275,13 @@ class _ActionBar extends ConsumerWidget {
         final result = await controller.workerComplete();
         if (!context.mounted) return;
         _showResult(context, result, successMessage: 'Job completed!');
+        if (result.success) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (context.mounted) {
+              context.push(Routes.completionPrompt(request.id));
+            }
+          });
+        }
         break;
 
       case ServiceRequestAction.cancel:

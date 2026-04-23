@@ -104,17 +104,7 @@ class UnifiedCompletionReportRepository implements CompletionReportRepository {
               (sr.assignedWorker?.id == userId));
       if (!mine) continue;
 
-      var report = _reports[sr.id];
-      if (report == null &&
-          role == UserRole.homeowner &&
-          _isRecentCompletedCompletion(sr)) {
-        report = CompletionReport(
-          jobId: sr.id,
-          createdAt: sr.updatedAt ?? DateTime.now(),
-        );
-        _reports[sr.id] = report;
-        _emitWatch(sr.id);
-      }
+      final report = _reports[sr.id];
       if (report == null) continue;
 
       final iSubmitted = role == UserRole.homeowner
@@ -133,14 +123,6 @@ class UnifiedCompletionReportRepository implements CompletionReportRepository {
 
     pending.sort((a, b) => a.report.createdAt.compareTo(b.report.createdAt));
     return pending;
-  }
-
-  static bool _isRecentCompletedCompletion(ServiceRequest sr) {
-    final t = sr.updatedAt ?? sr.createdAt;
-    if (t == null) return false;
-    final age = DateTime.now().difference(t);
-    return !age.isNegative &&
-        age <= AppConstants.completionPromptRecentCompletionMaxAge;
   }
 
   @override

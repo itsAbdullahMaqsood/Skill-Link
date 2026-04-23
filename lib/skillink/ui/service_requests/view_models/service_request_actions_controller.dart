@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skilllink/skillink/data/providers.dart';
 import 'package:skilllink/skillink/data/repositories/service_request_repository.dart';
@@ -97,16 +95,8 @@ class ServiceRequestActionsController
     try {
       final res = await fn();
       return res.when(
-        success: (sr) {
+        success: (_) {
           _invalidateRelated();
-          if (sr.status == ServiceRequestStatus.completed) {
-            unawaited(
-              _ref.read(completionReportRepositoryProvider).openReport(
-                    jobId: sr.id,
-                    createdAt: DateTime.now(),
-                  ),
-            );
-          }
           return const ServiceRequestActionResult.ok();
         },
         failure: (message, _) => ServiceRequestActionResult.err(message),

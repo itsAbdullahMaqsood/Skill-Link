@@ -17,6 +17,8 @@ class WorkerIncomingRequestsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final awardedSrIds =
+        ref.watch(workerAwardedOpenJobServiceRequestIdsProvider);
     final async =
         ref.watch(myServiceRequestsProvider(ServiceRequestRole.worker));
 
@@ -34,7 +36,15 @@ class WorkerIncomingRequestsScreen extends ConsumerWidget {
         ),
         child: async.when(
           data: (items) {
-            if (items.isEmpty) {
+            final restExOpenJob = items
+                .where(
+                  (r) =>
+                      !r.showsAsWorkerOngoingJob &&
+                      !awardedSrIds.contains(r.id),
+                )
+                .toList();
+            if (items.where((r) => r.showsAsWorkerOngoingJob).isEmpty &&
+                restExOpenJob.isEmpty) {
               return ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: const [
@@ -51,8 +61,7 @@ class WorkerIncomingRequestsScreen extends ConsumerWidget {
             }
             final ongoing =
                 items.where((r) => r.showsAsWorkerOngoingJob).toList();
-            final rest =
-                items.where((r) => !r.showsAsWorkerOngoingJob).toList();
+            final rest = restExOpenJob;
 
             return ListView(
               physics: const AlwaysScrollableScrollPhysics(),

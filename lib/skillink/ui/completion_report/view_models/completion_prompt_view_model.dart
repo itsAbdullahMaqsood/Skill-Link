@@ -19,6 +19,7 @@ class CompletionPromptState {
     this.errorMessage,
     this.isSubmitting = false,
     this.submittedReport,
+    this.isServiceRequestCompletion = false,
   });
 
   final Job? job;
@@ -29,6 +30,10 @@ class CompletionPromptState {
   final bool isSubmitting;
 
   final CompletionReport? submittedReport;
+
+  /// True when this prompt was opened for a [ServiceRequest] id (direct
+  /// booking). [job] is a display-only adapter; `/jobs/.../rate` must not be used.
+  final bool isServiceRequestCompletion;
 
   bool get isHomeowner => viewerRole == UserRole.homeowner;
 
@@ -42,6 +47,7 @@ class CompletionPromptState {
     bool? isSubmitting,
     CompletionReport? submittedReport,
     bool clearSubmittedReport = false,
+    bool? isServiceRequestCompletion,
   }) {
     return CompletionPromptState(
       job: job ?? this.job,
@@ -53,6 +59,8 @@ class CompletionPromptState {
       submittedReport: clearSubmittedReport
           ? null
           : (submittedReport ?? this.submittedReport),
+      isServiceRequestCompletion:
+          isServiceRequestCompletion ?? this.isServiceRequestCompletion,
     );
   }
 }
@@ -84,6 +92,7 @@ class CompletionPromptViewModel extends StateNotifier<CompletionPromptState> {
     final jobResult = await jobs.getJob(_jobId);
     if (!mounted) return;
     Job? job = jobResult.valueOrNull;
+    var fromServiceRequest = false;
     if (job == null) {
       final srResult = await _ref
           .read(serviceRequestRepositoryProvider)
@@ -98,6 +107,7 @@ class CompletionPromptViewModel extends StateNotifier<CompletionPromptState> {
         return;
       }
       job = jobForCompletionPrompt(sr);
+      fromServiceRequest = true;
     }
 
     await _repo.openReport(jobId: _jobId, createdAt: DateTime.now());
@@ -107,6 +117,7 @@ class CompletionPromptViewModel extends StateNotifier<CompletionPromptState> {
       job: job,
       viewerRole: auth.user!.role,
       bootstrapping: false,
+      isServiceRequestCompletion: fromServiceRequest,
     );
 
     _watchSub = _repo.watch(_jobId).listen((report) {

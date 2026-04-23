@@ -75,9 +75,6 @@ class JobTrackingScreen extends ConsumerWidget {
           ),
         ),
         body: _Body(state: state, vm: vm),
-        floatingActionButton: state.job == null || !state.job!.status.isActive
-            ? null
-            : _SosFab(),
       ),
     );
   }
@@ -476,41 +473,4 @@ class _ActionButtons extends ConsumerWidget {
   final latOffset = ((hash % 20) - 10) * 0.001;
   final lngOffset = (((hash >> 5) % 20) - 10) * 0.001;
   return (lat: seedLat + latOffset, lng: seedLng + lngOffset);
-}
-
-class _SosFab extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return FloatingActionButton.extended(
-      backgroundColor: AppColors.danger,
-      foregroundColor: Colors.white,
-      icon: const Icon(Icons.sos_rounded),
-      label: const Text('SOS'),
-      onPressed: () async {
-        final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Call emergency services?'),
-            content: const Text(
-                'This will dial 15 (Police). Only use in an emergency.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(true),
-                style: TextButton.styleFrom(foregroundColor: AppColors.danger),
-                child: const Text('Call 15'),
-              ),
-            ],
-          ),
-        );
-        if (confirmed == true) {
-          final uri = Uri.parse('tel:15');
-          if (await canLaunchUrl(uri)) await launchUrl(uri);
-        }
-      },
-    );
-  }
 }

@@ -9,6 +9,7 @@ import 'package:skilllink/skillink/ui/completion_report/view_models/completion_p
 import 'package:skilllink/skillink/ui/core/themes/app_colors.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_typography.dart';
 import 'package:skilllink/skillink/ui/core/ui/primary_button.dart';
+import 'package:skilllink/skillink/ui/core/ui/secondary_button.dart';
 
 class CompletionPromptScreen extends ConsumerStatefulWidget {
   const CompletionPromptScreen({super.key, required this.jobId});
@@ -66,23 +67,32 @@ class _CompletionPromptScreenState
           .select((s) => s.submittedReport),
       (prev, next) {
         if (next == null) return;
-        final isHomeowner = state.isHomeowner;
-        final job = state.job;
+        ref
+            .read(completionPromptViewModelProvider(widget.jobId).notifier)
+            .acknowledgeSubmission();
+
+        final vmState =
+            ref.read(completionPromptViewModelProvider(widget.jobId));
+        final isHomeowner = vmState.isHomeowner;
+        final job = vmState.job;
         final user = ref.read(authViewModelProvider).user;
-        String? destination;
+
         if (isHomeowner && job != null) {
-          destination = Routes.rateJob(job.jobId);
-        } else if (user != null) {
-          destination = Routes.homeFor(user.role);
+          if (vmState.isServiceRequestCompletion && context.canPop()) {
+            // Avoid context.go(sentRequestDetail): that replaces the stack with
+            // a single route so system back exits the app instead of leaving detail.
+            context.pop();
+            return;
+          }
+          final destination = vmState.isServiceRequestCompletion
+              ? Routes.sentRequestDetail(job.jobId)
+              : Routes.rateJob(job.jobId);
+          context.go(destination);
+          return;
         }
-        if (destination == null) return;
-        context.go(destination);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          ref
-              .read(completionPromptViewModelProvider(widget.jobId).notifier)
-              .acknowledgeSubmission();
-        });
+        if (user != null) {
+          context.go(Routes.homeFor(user.role));
+        }
       },
     );
 
@@ -104,7 +114,15 @@ class _CompletionPromptScreenState
             'misreporting can result in account suspension.';
 
     return PopScope(
-      canPop: false,
+      canPop: true,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) return;
+        final st = ref.read(completionPromptViewModelProvider(widget.jobId));
+        if (st.submittedReport != null) return;
+        ref
+            .read(completionPromptViewModelProvider(widget.jobId).notifier)
+            .acknowledgeSubmission();
+      },
       child: Scaffold(
         backgroundColor: AppColors.background,
         resizeToAvoidBottomInset: true,
@@ -163,12 +181,37 @@ class _CompletionPromptScreenState
                             onPressed: state.isSubmitting ? null : _submit,
                             isLoading: state.isSubmitting,
                           ),
+                          const SizedBox(height: 10),
+                          SecondaryButton(
+                            label: 'Skip for now',
+                            onPressed: state.isSubmitting
+                                ? null
+                                : () {
+                                    ref
+                                        .read(
+                                          completionPromptViewModelProvider(
+                                                  widget.jobId)
+                                              .notifier,
+                                        )
+                                        .acknowledgeSubmission();
+                                    if (context.canPop()) {
+                                      context.pop();
+                                    } else {
+                                      final user =
+                                          ref.read(authViewModelProvider).user;
+                                      if (user != null) {
+                                        context.go(Routes.homeFor(user.role));
+                                      }
+                                    }
+                                  },
+                          ),
                           const SizedBox(height: 8),
                           Text(
-                            "You can't use other parts of the app until "
-                            'this is submitted.',
+                            "Optional — you can return later from this "
+                            "request's details.",
                             textAlign: TextAlign.center,
-                            style: AppTypography.bodySmall,
+                            style: AppTypography.bodySmall
+                                .copyWith(color: AppColors.textMuted),
                           ),
                         ],
                       ),

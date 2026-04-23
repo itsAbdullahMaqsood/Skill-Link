@@ -43,6 +43,7 @@ class MarketplaceViewModel extends StateNotifier<MarketplaceState> {
     try {
       serviceMap = await _ref.read(labourServiceIdToNameProvider.future);
     } catch (_) {}
+    if (!mounted) return;
     final filter = state.filter.copyWith(
       serviceIdToName: serviceMap.isEmpty ? null : serviceMap,
     );

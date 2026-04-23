@@ -1,3 +1,5 @@
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skilllink/models/user.dart' as sc;
 import 'package:skilllink/services/auth_service.dart';
@@ -32,6 +34,7 @@ import 'package:skilllink/skillink/data/repositories/worker_repository.dart';
 import 'package:skilllink/skillink/data/services/api_service.dart';
 import 'package:skilllink/skillink/data/services/recent_worker_open_bid_storage.dart';
 import 'package:skilllink/skillink/data/services/fcm_service.dart';
+import 'package:skilllink/skillink/data/services/firebase_rtdb_live_service.dart';
 import 'package:skilllink/skillink/data/services/local_notifications_service.dart';
 import 'package:skilllink/skillink/data/services/maps_distance_service.dart';
 import 'package:skilllink/skillink/data/services/media_upload_service.dart';
@@ -44,7 +47,9 @@ import 'package:skilllink/skillink/testing/fakes/fake_iot_repository.dart';
 import 'package:skilllink/skillink/testing/fakes/fake_job_repository.dart';
 import 'package:skilllink/skillink/testing/fakes/fake_posted_jobs_hub.dart';
 import 'package:skilllink/skillink/testing/fakes/fake_worker_repository.dart';
+import 'package:skilllink/skillink/domain/models/sensor_reading.dart';
 import 'package:skilllink/skillink/ui/auth/view_models/auth_view_model.dart';
+import 'package:skilllink/skillink/utils/open_job_award_coverage.dart';
 
 const kUseFakeRepositories = true;
 
@@ -94,6 +99,26 @@ final labourServiceIdToNameProvider =
 
 final mediaUploadServiceProvider =
     Provider<MediaUploadService>((ref) => MediaUploadService());
+
+final firebaseRtdbLiveServiceProvider =
+    Provider<FirebaseRtdbLiveService>((ref) => FirebaseRtdbLiveService());
+
+/// ESP32 → `/sensorData` on the IoT Realtime Database (see `FIREBASE_RTDB_URL` in `.env`).
+/// Shown on the Live Monitor screen; works on Android after [Firebase.initializeApp] in `main`.
+final esp32SensorDataLiveStreamProvider =
+    StreamProvider.autoDispose<SensorReading?>((ref) {
+  if (defaultTargetPlatform != TargetPlatform.android) {
+    return Stream<SensorReading?>.value(null);
+  }
+  if (Firebase.apps.isEmpty) {
+    return Stream<SensorReading?>.value(null);
+  }
+  return ref.watch(firebaseRtdbLiveServiceProvider).watchEsp32SensorData();
+});
+
+/// Dev/demo: Live Monitor ESP32 card shows simulated amperes when enabled
+/// (toggled via a hidden gesture on that screen only).
+final esp32LiveMonitorFakeCurrentProvider = StateProvider<bool>((ref) => false);
 
 final mapsDistanceServiceProvider =
     Provider<MapsDistanceService>((ref) => MapsDistanceService());
@@ -184,6 +209,19 @@ final myOpenJobPostsProvider = FutureProvider.autoDispose
   return result.when(
     success: (list) => list,
     failure: (message, _) => throw Exception(message),
+  );
+});
+
+/// [OpenJobPost.serviceRequestId] values for posts awarded to the signed-in worker.
+/// Used to hide duplicate service-request rows next to tracking [Job] flows.
+final workerAwardedOpenJobServiceRequestIdsProvider =
+    Provider<Set<String>>((ref) {
+  final uid = ref.watch(authViewModelProvider).user?.id ?? '';
+  final postsAsync =
+      ref.watch(myOpenJobPostsProvider(ServiceRequestRole.worker));
+  return postsAsync.maybeWhen(
+    data: (posts) => workerAwardedOpenJobServiceRequestIds(posts, uid),
+    orElse: () => {},
   );
 });
 

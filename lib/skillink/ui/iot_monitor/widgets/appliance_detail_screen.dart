@@ -95,6 +95,9 @@ class ApplianceDetailScreen extends ConsumerWidget {
             onPressed: () async {
               final id = await vm.simulateAnomaly();
               if (id == null || !context.mounted) return;
+              // SnackBar actions can run after this route is popped; do not use
+              // BuildContext there — use GoRouter resolved while still mounted.
+              final router = GoRouter.of(context);
               ScaffoldMessenger.of(context)
                 ..hideCurrentSnackBar()
                 ..showSnackBar(SnackBar(
@@ -105,7 +108,7 @@ class ApplianceDetailScreen extends ConsumerWidget {
                   behavior: SnackBarBehavior.floating,
                   action: SnackBarAction(
                     label: 'Open',
-                    onPressed: () => context.push(Routes.alertDetail(id)),
+                    onPressed: () => router.push(Routes.alertDetail(id)),
                   ),
                 ));
             },

@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
+import 'package:skilllink/skillink/config/app_constants.dart';
 import 'package:skilllink/skillink/data/repositories/iot_repository.dart';
 import 'package:skilllink/skillink/data/services/api_service.dart';
+import 'package:skilllink/skillink/data/services/firebase_rtdb_live_service.dart';
 import 'package:skilllink/skillink/data/services/local_notifications_service.dart';
 import 'package:skilllink/skillink/domain/models/anomaly.dart';
 import 'package:skilllink/skillink/domain/models/appliance.dart';
@@ -13,14 +15,17 @@ class RemoteIotRepository implements IotRepository {
     required ApiService apiService,
     required LocalNotificationsService notifications,
     required String Function() currentUserId,
+    FirebaseRtdbLiveService? rtdbLive,
   })  : _api = apiService,
         _notifications = notifications,
-        _userId = currentUserId;
+        _userId = currentUserId,
+        _rtdb = rtdbLive ?? FirebaseRtdbLiveService();
 
   final ApiService _api;
   final LocalNotificationsService _notifications;
   // ignore: unused_field
   final String Function() _userId;
+  final FirebaseRtdbLiveService _rtdb;
 
   @override
   Future<Result<List<Appliance>>> getAppliances() async {
@@ -87,9 +92,13 @@ class RemoteIotRepository implements IotRepository {
 
   @override
   Stream<SensorReading> watchLiveSensorData(String deviceId) {
-    throw UnimplementedError(
-      'Live sensor streaming is not yet wired to the new SkillLink backend.',
-    );
+    if (deviceId == AppConstants.firebaseEsp32SensorDataDeviceId) {
+      return _rtdb
+          .watchEsp32SensorData()
+          .where((r) => r != null)
+          .map((r) => r!);
+    }
+    return const Stream.empty();
   }
 
   @override

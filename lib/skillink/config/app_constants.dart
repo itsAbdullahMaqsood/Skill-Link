@@ -10,6 +10,13 @@ class AppConstants {
   static String get firebaseRtdbUrl =>
       _env('FIREBASE_RTDB_URL', fallback: 'https://REPLACE_ME.firebaseio.com');
 
+  /// ESP32 posts latest readings here (sibling to `readings` push events).
+  static const String firebaseEsp32SensorDataPath = 'sensorData';
+
+  /// Use this as an appliance [Appliance.iotDeviceId] to bind live UI to
+  /// [firebaseEsp32SensorDataPath] in [RemoteIotRepository.watchLiveSensorData].
+  static const String firebaseEsp32SensorDataDeviceId = 'esp32-sensorData';
+
   static const String iotReadingsPath = 'readings';
   static const String iotDeviceLivePath = 'devices';
   static const String anomaliesPath = 'users';
@@ -67,12 +74,6 @@ class AppConstants {
 
   static const Duration postedJobETARefreshInterval = Duration(minutes: 2);
   static const double completionAmountDiscrepancyThreshold = 0.10;
-
-  /// Homeowner app never ran [openReport] (worker did on their device). Only
-  /// auto-create a local completion row for completed requests updated within
-  /// this window so we do not prompt on cold start for ancient history.
-  static const Duration completionPromptRecentCompletionMaxAge =
-      Duration(hours: 72);
 
   static const String completionReportsRoot = 'completion_reports';
 

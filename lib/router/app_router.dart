@@ -22,7 +22,6 @@ import 'package:skilllink/skillink/ui/booking/widgets/booking_screen.dart';
 import 'package:skilllink/skillink/ui/booking/widgets/booking_success_screen.dart';
 import 'package:skilllink/skillink/ui/chat/widgets/chat_list_screen.dart';
 import 'package:skilllink/skillink/ui/chat/widgets/chat_thread_screen.dart';
-import 'package:skilllink/skillink/ui/completion_report/view_models/pending_completion_reports_view_model.dart';
 import 'package:skilllink/skillink/ui/completion_report/widgets/completion_prompt_screen.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_colors.dart';
 import 'package:skilllink/skillink/ui/ai_chat/widgets/ai_chat_screen.dart';
@@ -215,15 +214,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       if (path == digitalHomePath || path.startsWith('$digitalHomePath/')) {
         return Routes.homeFor(role);
-      }
-
-      final pending = ref.read(oldestPendingCompletionReportProvider);
-      if (pending != null) {
-        final isOnPrompt = path.startsWith('/completion-prompt/');
-        final isOnRate = path.startsWith('/jobs/') && path.endsWith('/rate');
-        if (!isOnPrompt && !isOnRate) {
-          return Routes.completionPrompt(pending.jobId);
-        }
       }
 
       if (path == Routes.homeowner) return Routes.homeownerHome;
@@ -620,13 +610,6 @@ class _AuthRefresh extends ChangeNotifier {
     ref.listen<AuthState>(
       authViewModelProvider,
       (_, __) => notifyListeners(),
-      fireImmediately: false,
-    );
-    ref.listen(
-      oldestPendingCompletionReportProvider,
-      (prev, next) {
-        if (prev?.jobId != next?.jobId) notifyListeners();
-      },
       fireImmediately: false,
     );
     final skillRefresh = ref.read(_skillPrefsRefreshProvider);

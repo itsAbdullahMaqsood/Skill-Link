@@ -32,6 +32,13 @@ class FakeIotRepository implements IotRepository {
 
   static const _latency = Duration(milliseconds: 250);
 
+  /// Seeded demo appliances (Haier / Dawlance / NasGas) keep fixed readings
+  /// instead of jittering like a live stream.
+  static bool _isBundledSampleDevice(String deviceId) =>
+      SampleAppliances.all.any((a) => a.iotDeviceId == deviceId);
+
+  static final DateTime _bundledSampleTimestamp =
+      DateTime.utc(2024, 6, 1, 14, 30);
 
   @override
   Future<Result<List<Appliance>>> getAppliances() async {
@@ -70,26 +77,49 @@ class FakeIotRepository implements IotRepository {
 
   @override
   Stream<SensorReading> watchLiveSensorData(String deviceId) {
+    final bundledDummy = _isBundledSampleDevice(deviceId);
+
     final ctrl = _liveControllers.putIfAbsent(deviceId, () {
-      final controller = StreamController<SensorReading>.broadcast(
-        onCancel: () {
-        },
+      late final StreamController<SensorReading> c;
+      c = StreamController<SensorReading>.broadcast(
+        onListen: bundledDummy
+            ? () {
+                if (!c.isClosed) c.add(_nominalReading(deviceId));
+              }
+            : null,
       );
-      return controller;
+      return c;
     });
 
-    _liveTimers.putIfAbsent(deviceId, () {
-      return Timer.periodic(const Duration(milliseconds: 1500), (_) {
-        if (ctrl.isClosed) return;
-        ctrl.add(_synthesise(deviceId));
+    if (!bundledDummy) {
+      _liveTimers.putIfAbsent(deviceId, () {
+        return Timer.periodic(const Duration(milliseconds: 1500), (_) {
+          if (ctrl.isClosed) return;
+          ctrl.add(_synthesise(deviceId));
+        });
       });
-    });
 
-    scheduleMicrotask(() {
-      if (!ctrl.isClosed) ctrl.add(_synthesise(deviceId));
-    });
+      scheduleMicrotask(() {
+        if (!ctrl.isClosed) ctrl.add(_synthesise(deviceId));
+      });
+    }
 
     return ctrl.stream;
+  }
+
+  SensorReading _nominalReading(String deviceId) {
+    final appliance = _appliances.firstWhere(
+      (a) => a.iotDeviceId == deviceId,
+      orElse: () => _appliances.first,
+    );
+    final band = SampleAppliances.nominalBand[appliance.id] ??
+        const (voltage: 220, current: 1, wattage: 220);
+    return SensorReading(
+      voltage: band.voltage,
+      current: band.current,
+      wattage: band.wattage,
+      timestamp: _bundledSampleTimestamp,
+    );
   }
 
   SensorReading _synthesise(String deviceId) {

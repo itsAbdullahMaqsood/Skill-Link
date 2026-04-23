@@ -10,10 +10,15 @@ final pendingCompletionReportsProvider =
     return Stream.value(const <PendingCompletionReport>[]);
   }
   final repo = ref.watch(completionReportRepositoryProvider);
-  return repo.watchPendingForUser(
-    userId: auth.user!.id,
-    role: auth.user!.role,
-  );
+  final acked = ref.watch(acknowledgedCompletionReportsProvider);
+  return repo
+      .watchPendingForUser(
+        userId: auth.user!.id,
+        role: auth.user!.role,
+      )
+      .map(
+        (list) => list.where((p) => !acked.contains(p.jobId)).toList(),
+      );
 });
 
 class _AcknowledgedCompletionReports extends StateNotifier<Set<String>> {

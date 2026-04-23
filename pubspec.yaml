@@ -59,6 +59,10 @@ dependencies:
   # Realtime chat (skillchain)
   socket_io_client: ^3.1.0
 
+  # IoT: ESP32 → Firebase Realtime Database (live sensor strip on Live Monitor)
+  firebase_core: ^3.8.0
+  firebase_database: ^11.2.0
+
   # Local notifications (used by skillink deep-link tap handler).
   flutter_local_notifications: ^18.0.1
 
@@ -94,6 +98,8 @@ dev_dependencies:
   freezed: ^3.0.0
   json_serializable: ^6.9.4
   riverpod_generator: ^2.6.5
+  # Used by tool/regenerate_launcher_icon.dart (brand color vs launcher PNG)
+  image: ^4.8.0
 
 flutter:
   uses-material-design: true

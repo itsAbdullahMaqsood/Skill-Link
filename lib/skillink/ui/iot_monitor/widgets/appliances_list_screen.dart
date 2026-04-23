@@ -1,6 +1,11 @@
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:skilllink/skillink/data/providers.dart';
 import 'package:skilllink/skillink/domain/models/appliance.dart';
 import 'package:skilllink/skillink/domain/models/sensor_reading.dart';
 import 'package:skilllink/skillink/routing/routes.dart';
@@ -12,6 +17,7 @@ import 'package:skilllink/skillink/ui/iot_monitor/view_models/alerts_view_model.
 import 'package:skilllink/skillink/ui/iot_monitor/view_models/appliances_list_view_model.dart';
 import 'package:skilllink/skillink/ui/iot_monitor/widgets/add_appliance_sheet.dart';
 import 'package:skilllink/skillink/ui/iot_monitor/widgets/anomaly_visuals.dart';
+import 'package:intl/intl.dart';
 
 class AppliancesListScreen extends ConsumerWidget {
   const AppliancesListScreen({super.key});
@@ -62,54 +68,61 @@ class AppliancesListScreen extends ConsumerWidget {
       ),
       body: RefreshIndicator(
         onRefresh: vm.refresh,
-        child: state.isLoading && state.appliances.isEmpty
-            ? const _GridShimmer()
-            : state.appliances.isEmpty
-                ? ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    children: [
-                      SizedBox(
-                        height: MediaQuery.sizeOf(context).height * 0.6,
-                        child: EmptyState(
-                          icon: Icons.electrical_services_rounded,
-                          title: 'No appliances yet',
-                          subtitle:
-                              'Pair your ESP32 smart plug and track voltage, '
-                              'current, and wattage in real time.',
-                          actionLabel: 'Add Appliance',
-                          onAction: () => _showAddSheet(context, ref),
-                        ),
-                      ),
-                    ],
-                  )
-                : GridView.builder(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                      childAspectRatio: 0.95,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(bottom: 88),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: const _Esp32RtdbLiveCard(),
+            ),
+            if (state.isLoading && state.appliances.isEmpty)
+              const _GridShimmer()
+            else if (state.appliances.isEmpty)
+              SizedBox(
+                height: MediaQuery.sizeOf(context).height * 0.5,
+                child: EmptyState(
+                  icon: Icons.electrical_services_rounded,
+                  title: 'No appliances yet',
+                  subtitle:
+                      'Pair your ESP32 smart plug and track voltage, '
+                      'current, and wattage in real time.',
+                  actionLabel: 'Add Appliance',
+                  onAction: () => _showAddSheet(context, ref),
+                ),
+              )
+            else
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                gridDelegate:
+                    const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 0.95,
+                ),
+                itemCount: state.appliances.length,
+                itemBuilder: (_, i) {
+                  final appliance = state.appliances[i];
+                  final device = appliance.iotDeviceId;
+                  final live = device == null
+                      ? null
+                      : state.liveByDeviceId[device];
+                  return _ApplianceTile(
+                    appliance: appliance,
+                    liveReading: live,
+                    hasOpenAnomaly: openAnomalyApplianceIds
+                        .contains(appliance.id),
+                    onTap: () => context.push(
+                      Routes.applianceDetail(appliance.id),
                     ),
-                    itemCount: state.appliances.length,
-                    itemBuilder: (_, i) {
-                      final appliance = state.appliances[i];
-                      final device = appliance.iotDeviceId;
-                      final live = device == null
-                          ? null
-                          : state.liveByDeviceId[device];
-                      return _ApplianceTile(
-                        appliance: appliance,
-                        liveReading: live,
-                        hasOpenAnomaly:
-                            openAnomalyApplianceIds.contains(appliance.id),
-                        onTap: () => context.push(
-                          Routes.applianceDetail(appliance.id),
-                        ),
-                      );
-                    },
-                  ),
+                  );
+                },
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -124,6 +137,309 @@ class AppliancesListScreen extends ConsumerWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (_) => const AddApplianceSheet(),
+    );
+  }
+}
+
+/// Live strip for ESP32 → Firebase RTDB [`sensorData`].
+class _Esp32RtdbLiveCard extends ConsumerStatefulWidget {
+  const _Esp32RtdbLiveCard();
+
+  @override
+  ConsumerState<_Esp32RtdbLiveCard> createState() => _Esp32RtdbLiveCardState();
+}
+
+class _Esp32RtdbLiveCardState extends ConsumerState<_Esp32RtdbLiveCard> {
+  Timer? _fakeAmpsTimer;
+  double _fakeAmps = 0.25;
+
+  @override
+  void dispose() {
+    _fakeAmpsTimer?.cancel();
+    super.dispose();
+  }
+
+  void _ensureFakeAmpsTicker(bool want) {
+    if (want) {
+      if (_fakeAmpsTimer != null) return;
+      _fakeAmpsTimer = Timer.periodic(const Duration(milliseconds: 850), (_) {
+        if (!mounted) return;
+        setState(() {
+          final t = DateTime.now().millisecondsSinceEpoch / 1000.0;
+          final base = 0.25 * (1 + math.sin(t * 1.55));
+          final ripple = 0.12 * math.sin(t * 4.8) + 0.04 * math.sin(t * 11.2);
+          _fakeAmps = (base + ripple).clamp(0.0, 0.5);
+        });
+      });
+    } else {
+      _fakeAmpsTimer?.cancel();
+      _fakeAmpsTimer = null;
+    }
+  }
+
+  void _toggleFakeCurrentDemo() {
+    final next = !ref.read(esp32LiveMonitorFakeCurrentProvider);
+    ref.read(esp32LiveMonitorFakeCurrentProvider.notifier).state = next;
+    _ensureFakeAmpsTicker(next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      return _nonAndroid(context);
+    }
+
+    final fakeCurrent = ref.watch(esp32LiveMonitorFakeCurrentProvider);
+    final async = ref.watch(esp32SensorDataLiveStreamProvider);
+    final hasReading = async.hasValue && async.value != null;
+    _ensureFakeAmpsTicker(fakeCurrent && hasReading);
+
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(16),
+      child: Ink(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: AppColors.accent.withValues(alpha: 0.22),
+          ),
+          boxShadow: [
+            BoxShadow(
+              blurRadius: 20,
+              offset: const Offset(0, 4),
+              color: Colors.black.withValues(alpha: 0.06),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: async.when(
+            data: (r) => _buildBody(r, fakeCurrent: fakeCurrent),
+            loading: () => _loadingBody(),
+            error: (e, _) => _errorBody(context, e.toString()),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _nonAndroid(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.textMuted.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline_rounded, color: AppColors.textMuted),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'ESP32 live readings from Firebase load on Android.',
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textMuted,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody(SensorReading? reading, {required bool fakeCurrent}) {
+    if (reading == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _headerRow(live: false),
+          const SizedBox(height: 12),
+          Text(
+            'Listening on Realtime Database path `sensorData`…',
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textMuted,
+            ),
+          ),
+        ],
+      );
+    }
+
+    final timeStr = DateFormat('yyyy-MM-dd HH:mm:ss')
+        .format(reading.timestamp.toLocal());
+
+    final amps = fakeCurrent ? _fakeAmps : reading.current;
+    final watts = fakeCurrent
+        ? (reading.voltage * amps).abs()
+        : reading.wattage;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _headerRow(live: true),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: _metric(
+                label: 'Voltage',
+                value: '${reading.voltage.toStringAsFixed(1)} V',
+              ),
+            ),
+            Expanded(
+              child: _metric(
+                label: 'Current',
+                value: '${amps.toStringAsFixed(2)} A',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        _metric(
+          label: 'Power',
+          value: '${watts.toStringAsFixed(0)} W',
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Updated $timeStr',
+          style: AppTypography.monoSmall.copyWith(
+            color: AppColors.textMuted,
+            fontSize: 11,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _headerRow({required bool live}) {
+    final iconChild = Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: AppColors.accent.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Icon(
+        Icons.sensors_rounded,
+        color: AppColors.accent,
+      ),
+    );
+
+    return Row(
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onLongPress: _toggleFakeCurrentDemo,
+          child: iconChild,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'ESP32 smart monitor',
+                style: AppTypography.titleLarge,
+              ),
+              Text(
+                'Firebase Realtime Database',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (live)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFF16A34A),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'LIVE',
+                  style: AppTypography.labelMedium.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.6,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _metric({required String label, required String value}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppTypography.bodySmall.copyWith(
+            color: AppColors.textMuted,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: AppTypography.mono.copyWith(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _loadingBody() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _headerRow(live: false),
+        const SizedBox(height: 16),
+        const LinearProgressIndicator(
+          minHeight: 3,
+          borderRadius: BorderRadius.all(Radius.circular(4)),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Connecting to Firebase…',
+          style: AppTypography.bodySmall.copyWith(
+            color: AppColors.textMuted,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _errorBody(BuildContext context, String message) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _headerRow(live: false),
+        const SizedBox(height: 8),
+        Text(
+          message,
+          style: AppTypography.bodySmall.copyWith(color: AppColors.danger),
+        ),
+      ],
     );
   }
 }

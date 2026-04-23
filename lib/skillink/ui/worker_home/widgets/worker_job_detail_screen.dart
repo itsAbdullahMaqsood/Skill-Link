@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:skilllink/skillink/config/app_constants.dart';
 import 'package:skilllink/skillink/domain/models/bid.dart';
 import 'package:skilllink/skillink/domain/models/job.dart';
@@ -15,6 +16,7 @@ import 'package:skilllink/skillink/ui/core/ui/loading_shimmer.dart';
 import 'package:skilllink/skillink/ui/core/ui/primary_button.dart';
 import 'package:skilllink/skillink/ui/core/ui/secondary_button.dart';
 import 'package:skilllink/skillink/ui/core/ui/status_timeline.dart';
+import 'package:skilllink/skillink/routing/routes.dart';
 import 'package:skilllink/skillink/ui/worker_home/view_models/worker_job_detail_view_model.dart';
 import 'package:skilllink/skillink/ui/worker_home/widgets/bid_modal.dart';
 import 'package:skilllink/skillink/utils/text_format.dart';
@@ -39,6 +41,19 @@ class WorkerJobDetailScreen extends ConsumerWidget {
             ..showSnackBar(SnackBar(content: Text(msg)));
           vm.clearError();
         }
+      },
+    );
+
+    ref.listen(
+      workerJobDetailViewModelProvider(jobId).select((s) => s.job?.status),
+      (prev, next) {
+        if (next != JobStatus.completed) return;
+        if (prev == null || prev == JobStatus.completed) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (context.mounted) {
+            context.push(Routes.completionPrompt(jobId));
+          }
+        });
       },
     );
 

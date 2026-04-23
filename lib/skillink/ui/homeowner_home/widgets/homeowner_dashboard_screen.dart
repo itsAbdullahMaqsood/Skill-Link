@@ -77,9 +77,7 @@ class HomeownerDashboardScreen extends ConsumerWidget {
           ref.invalidate(
             myServiceRequestsProvider(ServiceRequestRole.customer),
           );
-          ref.invalidate(
-            myOpenJobPostsProvider(ServiceRequestRole.customer),
-          );
+          ref.invalidate(myOpenJobPostsProvider(ServiceRequestRole.customer));
           await viewModel.refresh();
         },
         child: ListView(
@@ -129,7 +127,6 @@ class HomeownerDashboardScreen extends ConsumerWidget {
     );
   }
 }
-
 
 class _GreetingCard extends StatelessWidget {
   const _GreetingCard({required this.name});
@@ -203,7 +200,6 @@ class _GreetingCard extends StatelessWidget {
     );
   }
 }
-
 
 class _QuickBookRow extends StatelessWidget {
   const _QuickBookRow();
@@ -304,7 +300,6 @@ class _QuickBookTile extends StatelessWidget {
   }
 }
 
-
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({required this.title, this.trailing});
 
@@ -322,7 +317,6 @@ class _SectionHeader extends StatelessWidget {
     );
   }
 }
-
 
 class _UnratedBanner extends ConsumerWidget {
   const _UnratedBanner();
@@ -395,7 +389,6 @@ class _UnratedBanner extends ConsumerWidget {
     );
   }
 }
-
 
 class _ActiveJobCard extends StatelessWidget {
   const _ActiveJobCard({required this.job});
@@ -510,7 +503,6 @@ class _ActiveJobCard extends StatelessWidget {
   }
 }
 
-
 class _IoTDevicesHealthSection extends ConsumerWidget {
   const _IoTDevicesHealthSection();
 
@@ -576,42 +568,22 @@ class _TestHealthAnomalyCtaState extends ConsumerState<_TestHealthAnomalyCta> {
 
   @override
   Widget build(BuildContext context) {
-    final appliances =
-        ref.watch(appliancesListViewModelProvider).appliances;
+    final appliances = ref.watch(appliancesListViewModelProvider).appliances;
     if (appliances.isEmpty) {
       return Text(
         'Pair an appliance under IoT to test health alerts and technician '
         'booking.',
-        style:
-            AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+        style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
       );
     }
-
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        onPressed: _busy ? null : () => _trigger(appliances.first.id),
-        icon: _busy
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(Icons.health_and_safety_outlined, size: 20),
-        label: Text(
-          _busy ? 'Creating alert…' : 'Simulate device health alert',
-          style: AppTypography.labelLarge,
-        ),
-      ),
-    );
+    return const SizedBox.shrink();
   }
 
   Future<void> _trigger(String applianceId) async {
     setState(() => _busy = true);
-    final res = await ref.read(iotRepositoryProvider).simulateAnomaly(
-          applianceId: applianceId,
-          type: 'voltage_spike',
-        );
+    final res = await ref
+        .read(iotRepositoryProvider)
+        .simulateAnomaly(applianceId: applianceId, type: 'voltage_spike');
     if (!mounted) return;
     setState(() => _busy = false);
 
@@ -628,9 +600,9 @@ class _TestHealthAnomalyCtaState extends ConsumerState<_TestHealthAnomalyCta> {
         );
       },
       failure: (msg, _) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(msg)));
       },
     );
   }
@@ -751,7 +723,6 @@ class _AddDeviceCard extends StatelessWidget {
   }
 }
 
-
 const _kInlineOpenPostsCap = 5;
 
 class _MyOpenPostsSection extends ConsumerWidget {
@@ -759,8 +730,9 @@ class _MyOpenPostsSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async =
-        ref.watch(myOpenJobPostsProvider(ServiceRequestRole.customer));
+    final async = ref.watch(
+      myOpenJobPostsProvider(ServiceRequestRole.customer),
+    );
     return async.when(
       loading: () => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -775,9 +747,10 @@ class _MyOpenPostsSection extends ConsumerWidget {
         children: [
           const _SectionHeader(title: 'Posted Jobs'),
           const SizedBox(height: 8),
-          Text('$e',
-              style: AppTypography.bodySmall
-                  .copyWith(color: AppColors.textMuted)),
+          Text(
+            '$e',
+            style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+          ),
         ],
       ),
       data: (posts) {
@@ -813,9 +786,9 @@ class _MyOpenPostsSection extends ConsumerWidget {
                 padding: const EdgeInsets.only(bottom: 10),
                 child: OpenJobPostCard(
                   post: p,
-                  onTap: () =>
-                      context.push(Routes.openJobPostDetail(p.id)),
-                  trailing: (p.bidCount != null &&
+                  onTap: () => context.push(Routes.openJobPostDetail(p.id)),
+                  trailing:
+                      (p.bidCount != null &&
                           p.status == OpenJobPostStatus.openForBids)
                       ? _BidCountBadge(count: p.bidCount!)
                       : null,
@@ -826,8 +799,9 @@ class _MyOpenPostsSection extends ConsumerWidget {
                 padding: const EdgeInsets.only(top: 4, bottom: 4),
                 child: Text(
                   'Showing $_kInlineOpenPostsCap of ${posts.length} posts.',
-                  style: AppTypography.bodySmall
-                      .copyWith(color: AppColors.textMuted),
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textMuted,
+                  ),
                 ),
               ),
           ],
@@ -851,13 +825,14 @@ class _BidCountBadge extends StatelessWidget {
       ),
       child: Text(
         '$count bid${count == 1 ? '' : 's'}',
-        style: AppTypography.labelMedium
-            .copyWith(color: AppColors.primary, fontSize: 11),
+        style: AppTypography.labelMedium.copyWith(
+          color: AppColors.primary,
+          fontSize: 11,
+        ),
       ),
     );
   }
 }
-
 
 class _MarketplacePreviewSection extends ConsumerWidget {
   const _MarketplacePreviewSection();
@@ -932,7 +907,6 @@ class _MarketplacePreviewSection extends ConsumerWidget {
   }
 }
 
-
 class _ActiveServicesSection extends ConsumerWidget {
   const _ActiveServicesSection();
 
@@ -958,8 +932,9 @@ class _ActiveServicesSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async =
-        ref.watch(myServiceRequestsProvider(ServiceRequestRole.customer));
+    final async = ref.watch(
+      myServiceRequestsProvider(ServiceRequestRole.customer),
+    );
 
     return async.maybeWhen(
       data: (items) {
@@ -971,7 +946,9 @@ class _ActiveServicesSection extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _SectionHeader(
-              title: active.length == 1 ? 'In Progress Job' : 'In Progress Jobs',
+              title: active.length == 1
+                  ? 'In Progress Job'
+                  : 'In Progress Jobs',
               trailing: active.length > _maxPreview
                   ? TextButton(
                       onPressed: () => context.push(Routes.sentRequests),
@@ -1004,8 +981,9 @@ class _RequestedServicesSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async =
-        ref.watch(myServiceRequestsProvider(ServiceRequestRole.customer));
+    final async = ref.watch(
+      myServiceRequestsProvider(ServiceRequestRole.customer),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1035,8 +1013,7 @@ class _RequestedServicesSection extends ConsumerWidget {
               return const EmptyState(
                 icon: Icons.outbox_outlined,
                 title: 'No sent requests',
-                subtitle:
-                    'Book a worker from the marketplace to see it here.',
+                subtitle: 'Book a worker from the marketplace to see it here.',
               );
             }
             final preview = items.take(_maxPreview).toList();

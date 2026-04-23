@@ -74,11 +74,18 @@ class WorkerJobsScreen extends ConsumerWidget {
     final state = ref.watch(workerJobsViewModelProvider);
     final vm = ref.read(workerJobsViewModelProvider.notifier);
     final user = ref.watch(authViewModelProvider).user;
+    final awardedSrIds =
+        ref.watch(workerAwardedOpenJobServiceRequestIdsProvider);
     final srAsync = ref.watch(
       myServiceRequestsProvider(ServiceRequestRole.worker),
     );
     final activeServiceRequest = srAsync.maybeWhen(
-      data: _pickPrimaryWorkerOngoingRequest,
+      data: (list) {
+        final forPick = state.activeJob != null
+            ? list.where((r) => !awardedSrIds.contains(r.id)).toList()
+            : list;
+        return _pickPrimaryWorkerOngoingRequest(forPick);
+      },
       orElse: () => null,
     );
 
@@ -707,13 +714,20 @@ class _IncomingRequestsSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final awardedSrIds =
+        ref.watch(workerAwardedOpenJobServiceRequestIdsProvider);
     final async = ref.watch(
       myServiceRequestsProvider(ServiceRequestRole.worker),
     );
 
     final directBookings = async.maybeWhen(
       data: (list) => list
-          .where((r) => !r.isTerminal && !r.showsAsWorkerOngoingJob)
+          .where(
+            (r) =>
+                !r.isTerminal &&
+                !r.showsAsWorkerOngoingJob &&
+                !awardedSrIds.contains(r.id),
+          )
           .toList(),
       orElse: () => const <ServiceRequest>[],
     );
