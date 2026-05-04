@@ -12,8 +12,9 @@ import 'package:skilllink/skillink/ui/auth/view_models/auth_view_model.dart';
 
 /// Auto-manages [WorkerLocationPublisher] lifecycle so the homeowner sees the
 /// worker's live location for the *entire* active window of a service request
-/// — from `bid_accepted` through `on_the_way` — without requiring the worker
-/// to manually tap "On the way" first.
+/// — from the moment the worker interacts (`worker_accepted` / `bid_received`)
+/// through negotiation, en route, and on site (`arrived` / `in_progress`) —
+/// without requiring the worker to manually tap "On the way" first.
 ///
 /// Mounted globally in `SkillChainApp.build` (alongside `fcmBindingProvider`
 /// and `chatBindingProvider`) so the worker is auto-broadcasting any time
@@ -49,8 +50,12 @@ final workerLiveLocationBindingProvider = Provider<int>((ref) {
 
   bool isLocationShareWindow(ServiceRequest r) {
     if (r.cancelled) return false;
-    return r.status == ServiceRequestStatus.bidAccepted ||
-        r.status == ServiceRequestStatus.onTheWay;
+    return r.status == ServiceRequestStatus.workerAccepted ||
+        r.status == ServiceRequestStatus.bidReceived ||
+        r.status == ServiceRequestStatus.bidAccepted ||
+        r.status == ServiceRequestStatus.onTheWay ||
+        r.status == ServiceRequestStatus.arrived ||
+        r.status == ServiceRequestStatus.inProgress;
   }
 
   Future<bool> isPermissionAlreadyGranted() async {

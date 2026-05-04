@@ -153,14 +153,12 @@ class WorkerLocationPublisher {
     if (sub != null) {
       await sub.cancel();
     }
-    final id = _workerId;
     _workerId = null;
     _lastPushed = null;
     _lastPushAt = null;
     _running = false;
-    if (id != null) {
-      await _service.clear(id);
-    }
+    // Intentionally do not call [_service.clear]: the last RTDB fix stays so
+    // homeowners still see where the worker ended (e.g. after "Arrived").
     await _stopForegroundService();
   }
 

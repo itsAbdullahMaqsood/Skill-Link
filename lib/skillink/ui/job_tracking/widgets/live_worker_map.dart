@@ -30,7 +30,9 @@ class _LiveWorkerMapState extends State<LiveWorkerMap> {
   GoogleMapController? _controller;
   LatLng? _worker;
   bool _mapFailed = false;
-  bool _didInitialFit = false;
+
+  /// First time we have both a controller and a real worker fix; fit both.
+  bool _didFitWorkerBounds = false;
   StreamSubscription<({double lat, double lng})>? _sub;
 
   List<LatLng>? _routePoints;
@@ -48,17 +50,10 @@ class _LiveWorkerMapState extends State<LiveWorkerMap> {
 
   LatLng get _home => LatLng(widget.homeLocation.lat, widget.homeLocation.lng);
 
-  LatLng get _seededWorker =>
-      LatLng(widget.homeLocation.lat + 0.006, widget.homeLocation.lng + 0.006);
-
-  LatLng get _effectiveWorker => _worker ?? _seededWorker;
-
   @override
   void initState() {
     super.initState();
     _loadWorkerIcon();
-
-    _scheduleRouteFetch();
 
     _sub = widget.locationStream.listen(
       (p) {
@@ -67,10 +62,7 @@ class _LiveWorkerMapState extends State<LiveWorkerMap> {
           _worker = LatLng(p.lat, p.lng);
           _lastFixAt = DateTime.now().toUtc();
         });
-        if (!_didInitialFit) {
-          _didInitialFit = true;
-          _fitBounds();
-        }
+        _maybeFitWorkerBounds();
         _scheduleRouteFetch();
       },
       onError: (Object _) {
@@ -80,11 +72,20 @@ class _LiveWorkerMapState extends State<LiveWorkerMap> {
     );
   }
 
+  void _maybeFitWorkerBounds() {
+    if (_worker == null || _controller == null) return;
+    if (_didFitWorkerBounds) return;
+    _didFitWorkerBounds = true;
+    unawaited(_fitBounds());
+  }
+
   void _scheduleRouteFetch() {
+    if (_worker == null) return;
     _routeDebounce?.cancel();
     _routeDebounce = Timer(const Duration(milliseconds: 400), () {
       if (!mounted) return;
-      final w = _effectiveWorker;
+      final w = _worker;
+      if (w == null) return;
       final anchor = _lastRouteAnchor;
       if (anchor != null &&
           _metersBetween(anchor, w) < _routeRefreshMeters &&
@@ -97,9 +98,10 @@ class _LiveWorkerMapState extends State<LiveWorkerMap> {
   }
 
   Future<void> _fetchRoute() async {
+    if (_worker == null) return;
     if (_isFetchingRoute) return;
     _isFetchingRoute = true;
-    final origin = _effectiveWorker;
+    final origin = _worker!;
     final destination = _home;
     final res = await _directions.fetchRoute(
       origin: origin,
@@ -142,10 +144,24 @@ class _LiveWorkerMapState extends State<LiveWorkerMap> {
 
   static double _toRadians(double deg) => deg * math.pi / 180.0;
 
+  Future<void> _fitHomeOnly() async {
+    final c = _controller;
+    if (c == null) return;
+    try {
+      await c.animateCamera(CameraUpdate.newLatLngZoom(_home, 14));
+    } on Exception {
+      await c.animateCamera(CameraUpdate.newLatLng(_home));
+    }
+  }
+
   Future<void> _fitBounds() async {
     final c = _controller;
     if (c == null) return;
-    final w = _effectiveWorker;
+    final w = _worker;
+    if (w == null) {
+      await _fitHomeOnly();
+      return;
+    }
 
     final bounds = LatLngBounds(
       southwest: LatLng(
@@ -187,19 +203,18 @@ class _LiveWorkerMapState extends State<LiveWorkerMap> {
       );
     }
 
-    final w = _effectiveWorker;
-    final etaMin = etaMinutesFromHaversine(
-      w.latitude,
-      w.longitude,
-      _home.latitude,
-      _home.longitude,
-    );
-    final distanceKm = haversineKm(
-      w.latitude,
-      w.longitude,
-      _home.latitude,
-      _home.longitude,
-    );
+    final w = _worker;
+    final etaMin = w == null
+        ? null
+        : etaMinutesFromHaversine(
+            w.latitude,
+            w.longitude,
+            _home.latitude,
+            _home.longitude,
+          );
+    final distanceKm = w == null
+        ? null
+        : haversineKm(w.latitude, w.longitude, _home.latitude, _home.longitude);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -218,37 +233,45 @@ class _LiveWorkerMapState extends State<LiveWorkerMap> {
               Positioned(
                 right: 12,
                 bottom: 12,
-                child: _RecenterButton(onPressed: _fitBounds),
+                child: _RecenterButton(
+                  onPressed: () {
+                    if (_worker == null) {
+                      unawaited(_fitHomeOnly());
+                    } else {
+                      unawaited(_fitBounds());
+                    }
+                  },
+                ),
               ),
             ],
           ),
         ),
         const SizedBox(height: 8),
-        Row(
-          children: [
-            const Icon(
-              Icons.directions_car_rounded,
-              size: 18,
-              color: AppColors.primary,
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                'ETA ~$etaMin min · ${distanceKm.toStringAsFixed(1)} km',
-                style: AppTypography.titleLarge.copyWith(fontSize: 14),
+        if (etaMin != null && distanceKm != null) ...[
+          Row(
+            children: [
+              const Icon(
+                Icons.directions_car_rounded,
+                size: 18,
+                color: AppColors.primary,
               ),
-            ),
-            Text(
-              _worker == null
-                  ? 'Approx. location'
-                  : _formatFixAge(_lastFixAt ?? DateTime.now().toUtc()),
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.textMuted,
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'ETA ~$etaMin min · ${distanceKm!.toStringAsFixed(1)} km',
+                  style: AppTypography.titleLarge.copyWith(fontSize: 14),
+                ),
               ),
-            ),
-          ],
-        ),
-        SizedBox(height: 16),
+              Text(
+                _formatFixAge(_lastFixAt ?? DateTime.now().toUtc()),
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 16),
+        ],
       ],
     );
   }
@@ -274,19 +297,26 @@ class _LiveWorkerMapState extends State<LiveWorkerMap> {
   }
 
   Widget _buildMap() {
-    final w = _effectiveWorker;
-    final initialTarget = LatLng(
-      (w.latitude + _home.latitude) / 2,
-      (w.longitude + _home.longitude) / 2,
-    );
+    final w = _worker;
+    final initialTarget = w == null
+        ? _home
+        : LatLng(
+            (w.latitude + _home.latitude) / 2,
+            (w.longitude + _home.longitude) / 2,
+          );
+    final initialZoom = w == null ? 14.0 : 13.0;
 
     return GoogleMap(
-      initialCameraPosition: CameraPosition(target: initialTarget, zoom: 13),
+      initialCameraPosition: CameraPosition(
+        target: initialTarget,
+        zoom: initialZoom,
+      ),
       onMapCreated: (c) {
         _controller = c;
-        if (!_didInitialFit) {
-          _didInitialFit = true;
-          _fitBounds();
+        if (w != null) {
+          _maybeFitWorkerBounds();
+        } else {
+          unawaited(_fitHomeOnly());
         }
       },
       gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
@@ -308,24 +338,23 @@ class _LiveWorkerMapState extends State<LiveWorkerMap> {
           ),
           infoWindow: const InfoWindow(title: 'Home'),
         ),
-        Marker(
-          markerId: const MarkerId('worker'),
-          position: w,
-          icon:
-              _workerIcon ??
-              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-          anchor: const Offset(0.5, 1.0),
-          infoWindow: InfoWindow(
-            title: 'Worker',
-            snippet: _worker == null ? 'Approx. location' : 'Live',
+        if (w != null)
+          Marker(
+            markerId: const MarkerId('worker'),
+            position: w,
+            icon:
+                _workerIcon ??
+                BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+            anchor: const Offset(0.5, 1.0),
+            infoWindow: const InfoWindow(title: 'Worker', snippet: 'Live'),
           ),
-        ),
       },
       polylines: _buildPolylines(w),
     );
   }
 
-  Set<Polyline> _buildPolylines(LatLng worker) {
+  Set<Polyline> _buildPolylines(LatLng? worker) {
+    if (worker == null) return {};
     final road = _routePoints;
     final points = (road != null && road.length >= 2)
         ? road

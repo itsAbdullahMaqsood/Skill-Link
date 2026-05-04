@@ -1,12 +1,9 @@
 import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:skilllink/skillink/config/app_constants.dart';
 import 'package:skilllink/skillink/data/providers.dart';
 import 'package:skilllink/skillink/domain/models/open_job_post.dart';
@@ -23,7 +20,7 @@ import 'package:skilllink/skillink/ui/chat/chat_entry.dart';
 import 'package:skilllink/skillink/ui/marketplace/view_models/worker_profile_view_model.dart';
 import 'package:skilllink/skillink/ui/open_job_post/view_models/open_job_post_actions_controller.dart';
 import 'package:skilllink/skillink/ui/open_job_post/widgets/open_job_post_bid_sheet.dart';
-import 'package:skilllink/skillink/ui/core/ui/eta_badge.dart';
+import 'package:skilllink/skillink/ui/service_requests/widgets/live_tracking_map.dart';
 import 'package:skilllink/skillink/utils/avatar_url_image.dart';
 import 'package:skilllink/skillink/utils/currency_format.dart';
 
@@ -232,7 +229,49 @@ class _DetailBody extends ConsumerWidget {
           const SizedBox(height: 20),
           _SectionLabel('Job location'),
           const SizedBox(height: 8),
-          _HomeownerLocationMap(address: post.serviceAddress),
+          if (viewerId != null && viewerId!.isNotEmpty) ...[
+            LiveTrackingMap(
+              workerId: viewerId!,
+              serviceAddress: post.serviceAddress,
+              allowUserPanAndZoom: false,
+              mapHeight: 180,
+              routeLineColor: Colors.red,
+            ),
+            const SizedBox(height: 6),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.location_on_outlined,
+                  size: 16,
+                  color: AppColors.primary,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    post.serviceAddress,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ] else
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Text(
+                post.serviceAddress,
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ),
         ],
         const SizedBox(height: 20),
         _SectionLabel(isAuthor ? 'Bids' : 'Your bid'),
@@ -882,6 +921,18 @@ class _BidTile extends ConsumerWidget {
               workerId: bid.workerId,
               canChat: bid.status == OpenJobPostBidStatus.pending,
             ),
+          if (isAuthor &&
+              post.serviceAddress.trim().isNotEmpty &&
+              bid.workerId.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            LiveTrackingMap(
+              workerId: bid.workerId,
+              serviceAddress: post.serviceAddress,
+              allowUserPanAndZoom: false,
+              mapHeight: 200,
+              routeLineColor: Colors.red,
+            ),
+          ],
           if (isAuthor) const SizedBox(height: 10),
           Row(
             children: [
@@ -899,14 +950,14 @@ class _BidTile extends ConsumerWidget {
             '${formatPkr(bid.amount)} labour + ${formatPkr(bid.visitingFee)} visit',
             style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
           ),
-          if (isAuthor) ...[
-            const SizedBox(height: 6),
-            EtaBadge(
-              workerId: bid.workerId,
-              serviceAddress: post.serviceAddress,
-              prefix: 'ETA',
-            ),
-          ],
+          // if (isAuthor) ...[
+          //   const SizedBox(height: 6),
+          //   EtaBadge(
+          //     workerId: bid.workerId,
+          //     serviceAddress: post.serviceAddress,
+          //     prefix: 'ETA',
+          //   ),
+          // ],
           if (bid.note != null && bid.note!.trim().isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(bid.note!, style: AppTypography.bodyMedium),
@@ -1217,169 +1268,6 @@ class _CancelPostButton extends ConsumerWidget {
         'Cancel this post',
         style: TextStyle(color: AppColors.danger),
       ),
-    );
-  }
-}
-
-class _HomeownerLocationMap extends ConsumerStatefulWidget {
-  const _HomeownerLocationMap({required this.address});
-
-  final String address;
-
-  @override
-  ConsumerState<_HomeownerLocationMap> createState() =>
-      _HomeownerLocationMapState();
-}
-
-class _HomeownerLocationMapState extends ConsumerState<_HomeownerLocationMap> {
-  GoogleMapController? _map;
-  LatLng? _location;
-  bool _resolving = true;
-  bool _failed = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _resolve();
-  }
-
-  @override
-  void didUpdateWidget(covariant _HomeownerLocationMap oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.address.trim() != widget.address.trim()) {
-      _resolve();
-    }
-  }
-
-  @override
-  void dispose() {
-    _map?.dispose();
-    super.dispose();
-  }
-
-  Future<void> _resolve() async {
-    setState(() {
-      _resolving = true;
-      _failed = false;
-    });
-    final geo = ref.read(geocodingCacheProvider);
-    final coords = await geo.resolve(widget.address);
-    if (!mounted) return;
-    setState(() {
-      _resolving = false;
-      if (coords == null) {
-        _failed = true;
-      } else {
-        _location = LatLng(coords.lat, coords.lng);
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_resolving) {
-      return Container(
-        height: 180,
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
-        ),
-        alignment: Alignment.center,
-        child: const SizedBox(
-          width: 22,
-          height: 22,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
-      );
-    }
-
-    if (_failed || _location == null) {
-      return Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.location_off_outlined,
-              size: 18,
-              color: AppColors.textMuted,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Could not resolve this address on the map.',
-                style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.textMuted,
-                ),
-              ),
-            ),
-            TextButton(onPressed: _resolve, child: const Text('Retry')),
-          ],
-        ),
-      );
-    }
-
-    final loc = _location!;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: SizedBox(
-            height: 180,
-            child: GoogleMap(
-              initialCameraPosition: CameraPosition(target: loc, zoom: 15),
-              markers: {
-                Marker(
-                  markerId: const MarkerId('homeowner'),
-                  position: loc,
-                  infoWindow: const InfoWindow(title: 'Job location'),
-                ),
-              },
-              myLocationButtonEnabled: false,
-              zoomControlsEnabled: false,
-              compassEnabled: false,
-              mapToolbarEnabled: false,
-              liteModeEnabled: defaultTargetPlatform == TargetPlatform.android,
-              scrollGesturesEnabled: false,
-              zoomGesturesEnabled: false,
-              rotateGesturesEnabled: false,
-              tiltGesturesEnabled: false,
-              gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
-                Factory<OneSequenceGestureRecognizer>(
-                  () => EagerGestureRecognizer(),
-                ),
-              },
-              onMapCreated: (c) => _map = c,
-            ),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(
-              Icons.location_on_outlined,
-              size: 16,
-              color: AppColors.primary,
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                widget.address,
-                style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.textMuted,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
     );
   }
 }

@@ -22,8 +22,6 @@ import 'package:skilllink/skillink/ui/service_requests/widgets/party_card.dart';
 import 'package:skilllink/skillink/ui/service_requests/widgets/request_location_map.dart';
 import 'package:skilllink/skillink/utils/currency_format.dart';
 
-const Duration _kDetailPollInterval = Duration(seconds: 10);
-
 class SentRequestDetailScreen extends ConsumerStatefulWidget {
   const SentRequestDetailScreen({super.key, required this.requestId});
 
@@ -197,14 +195,19 @@ bool _showCustomerCompletionNudge(
 }
 
 /// Customer-facing live worker map is shown for the entire active window of a
-/// service request — once a bid is accepted, the worker's app auto-publishes
-/// their location (see `workerLiveLocationBindingProvider`) so the homeowner
-/// can watch them right away without waiting for the explicit "On the way"
-/// tap. The map disappears once the worker arrives / completes / cancels.
+/// service request — once the worker has placed a bid (`bid_received` onward),
+/// the app auto-publishes their location (see `workerLiveLocationBindingProvider`)
+/// so the homeowner can watch them without waiting for the explicit "On the way"
+/// tap. The map stays visible through arrival and in-progress so the homeowner
+/// always sees the last known position.
 bool _showsLiveTracking(ServiceRequest request) {
   if (request.cancelled) return false;
-  return request.status == ServiceRequestStatus.bidAccepted ||
-      request.status == ServiceRequestStatus.onTheWay;
+  return request.status == ServiceRequestStatus.workerAccepted ||
+      request.status == ServiceRequestStatus.bidReceived ||
+      request.status == ServiceRequestStatus.bidAccepted ||
+      request.status == ServiceRequestStatus.onTheWay ||
+      request.status == ServiceRequestStatus.arrived ||
+      request.status == ServiceRequestStatus.inProgress;
 }
 
 class _CustomerCompletionNudgeCard extends ConsumerWidget {
@@ -282,10 +285,16 @@ class _DetailBody extends ConsumerWidget {
         ? (request.requestingCustomer, PartyCardVariant.customer)
         : (null, PartyCardVariant.worker);
 
-    return ListView(
+    // Use a single scrollable + [Column] (not [ListView]) so children are not
+    // lazily unmounted when off-screen — otherwise the live map's RTDB stream
+    // and native map view reset after small scrolls.
+    return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-      children: [
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
         _HeaderCard(request: request),
         if (_showCustomerCompletionNudge(ref, request, viewer)) ...[
           _CustomerCompletionNudgeCard(requestId: request.id),
@@ -304,17 +313,13 @@ class _DetailBody extends ConsumerWidget {
         ],
         if (viewer == ServiceRequestViewer.customer &&
             _showsLiveTracking(request) &&
-            request.requestedWorkerId.isNotEmpty &&
+            request.effectiveWorkerId.isNotEmpty &&
             request.serviceAddress.trim().isNotEmpty) ...[
           const SizedBox(height: 16),
-          _SectionLabel(
-            request.status == ServiceRequestStatus.onTheWay
-                ? 'Worker en route'
-                : 'Worker location',
-          ),
+          _SectionLabel(_locationLabel(request.status)),
           const SizedBox(height: 8),
           LiveTrackingMap(
-            workerId: request.requestedWorkerId,
+            workerId: request.effectiveWorkerId,
             serviceAddress: request.serviceAddress,
             status: request.status,
           ),
@@ -352,7 +357,8 @@ class _DetailBody extends ConsumerWidget {
         _SectionLabel('Progress'),
         const SizedBox(height: 8),
         _Timeline(request: request),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -1384,6 +1390,18 @@ class _SectionLabel extends StatelessWidget {
         fontSize: 11,
       ),
     );
+  }
+}
+
+String _locationLabel(ServiceRequestStatus status) {
+  switch (status) {
+    case ServiceRequestStatus.onTheWay:
+      return 'Worker en route';
+    case ServiceRequestStatus.arrived:
+    case ServiceRequestStatus.inProgress:
+      return 'Worker on site';
+    default:
+      return 'Worker location';
   }
 }
 

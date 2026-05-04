@@ -306,6 +306,14 @@ class ServiceRequest {
   final String requestingUserId;
   final String requestedWorkerId;
 
+  /// Resolves the worker’s user id for live location (RTDB) when the API
+  /// omits [requestedWorkerId] but populates [assignedWorker].
+  String get effectiveWorkerId {
+    final w = requestedWorkerId.trim();
+    if (w.isNotEmpty) return w;
+    return assignedWorker?.id.trim() ?? '';
+  }
+
   final ServiceRequestParty? assignedWorker;
 
   final ServiceRequestParty? requestingCustomer;
@@ -395,7 +403,10 @@ class ServiceRequest {
     return ServiceRequest(
       id: (root['id'] ?? root['_id'] ?? '').toString(),
       requestingUserId: (root['requestingUserId'] ?? '').toString(),
-      requestedWorkerId: (root['requestedWorkerId'] ?? '').toString(),
+      requestedWorkerId: (root['requestedWorkerId'] ??
+              root['requested_worker_id'] ??
+              '')
+          .toString(),
       description: (root['description'] ?? '').toString(),
       photos: photos,
       scheduledServiceDate: (root['scheduledServiceDate'] ?? '').toString(),

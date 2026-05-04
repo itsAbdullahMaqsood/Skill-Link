@@ -1,5 +1,9 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skilllink/skillink/data/providers.dart';
+import 'package:skilllink/skillink/data/services/worker_location_publisher.dart';
 import 'package:skilllink/skillink/data/repositories/open_job_post_repository.dart';
 import 'package:skilllink/skillink/data/repositories/service_request_repository.dart';
 import 'package:skilllink/skillink/data/services/recent_worker_open_bid_storage.dart';
@@ -116,6 +120,7 @@ class OpenJobPostActionsController
           }
         }
         _invalidatePost();
+        unawaited(_startLocationPublisherAfterOpenBid());
         return SubmitBidOutcome.success(bid);
       case Failure(:final message):
         state = state.copyWith(
@@ -182,6 +187,23 @@ class OpenJobPostActionsController
         return false;
       },
     );
+  }
+
+  Future<void> _startLocationPublisherAfterOpenBid() async {
+    final perm = await WorkerLocationPublisher.ensurePermission();
+    if (!perm.granted) {
+      debugPrint(
+        '[openJobPost.submitBid] location not granted (${perm.message})',
+      );
+      return;
+    }
+    final uid = ref.read(authViewModelProvider).user?.id;
+    if (uid == null || uid.isEmpty) return;
+    try {
+      await ref.read(workerLocationPublisherProvider).start(workerId: uid);
+    } catch (e, st) {
+      debugPrint('[openJobPost.submitBid] publisher.start failed: $e\n$st');
+    }
   }
 
   void _invalidatePost() {

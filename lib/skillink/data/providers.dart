@@ -244,8 +244,12 @@ final workerLocationPublisherProvider =
 });
 
 /// Streams the latest live location for a worker (RTDB).
-final workerLiveLocationProvider = StreamProvider.autoDispose
-    .family<WorkerLiveLocation?, String>((ref, workerId) {
+///
+/// Not [autoDispose]: [ListView] lazy-build removes off-screen children; when
+/// the map scrolls away briefly, [StreamProvider.autoDispose] tears down the
+/// RTDB subscription and the UI snaps back to loading when scrolled back.
+final workerLiveLocationProvider =
+    StreamProvider.family<WorkerLiveLocation?, String>((ref, workerId) {
   return ref
       .watch(workerLiveLocationServiceProvider)
       .watch(workerId);

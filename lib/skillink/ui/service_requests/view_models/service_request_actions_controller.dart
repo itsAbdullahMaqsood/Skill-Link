@@ -60,12 +60,52 @@ class ServiceRequestActionsController
   Future<ServiceRequestActionResult> workerBid({
     required num amount,
     required num visitingFee,
-  }) =>
-      _run(() => _repo.workerBid(
-            id: requestId,
-            amount: amount,
-            visitingFee: visitingFee,
-          ));
+  }) async {
+    if (state.isSubmitting) {
+      return const ServiceRequestActionResult.err('Please wait…');
+    }
+    state = state.copyWith(isSubmitting: true);
+    try {
+      final res = await _repo.workerBid(
+        id: requestId,
+        amount: amount,
+        visitingFee: visitingFee,
+      );
+      switch (res) {
+        case Success():
+          _invalidateRelated();
+          unawaited(_startLocationPublisherAfterBid());
+          return const ServiceRequestActionResult.ok();
+        case Failure(:final message):
+          return ServiceRequestActionResult.err(message);
+      }
+    } finally {
+      if (mounted) {
+        state = state.copyWith(isSubmitting: false);
+      }
+    }
+  }
+
+  /// After a successful bid the request is `bid_received`; publish GPS when
+  /// permission allows so the homeowner does not wait for "On the way".
+  Future<void> _startLocationPublisherAfterBid() async {
+    final perm = await WorkerLocationPublisher.ensurePermission();
+    if (!perm.granted) {
+      debugPrint(
+        '[workerBid] location permission not granted (${perm.message}); '
+        'binding may start publisher once permission is available.',
+      );
+      return;
+    }
+    final uid = _ref.read(authViewModelProvider).user?.id;
+    if (uid == null || uid.isEmpty) return;
+    try {
+      debugPrint('[workerBid] starting location publisher workerId=$uid');
+      await _ref.read(workerLocationPublisherProvider).start(workerId: uid);
+    } catch (e, st) {
+      debugPrint('[workerBid] publisher.start failed: $e\n$st');
+    }
+  }
 
   Future<ServiceRequestActionResult> workerAcceptCustomerCounter({
     required num amount,
@@ -104,9 +144,8 @@ class ServiceRequestActionsController
     state = state.copyWith(isSubmitting: true);
     try {
       // 1) Push an initial fix to RTDB BEFORE flipping the backend status, so
-      //    the homeowner's LiveTrackingMap (which only mounts when status ==
-      //    onTheWay) renders the worker's real position on its very first
-      //    frame instead of the waiting skeleton.
+      //    the homeowner's LiveTrackingMap renders the worker's real position
+      //    on its very first frame instead of the waiting skeleton.
       final uid = _ref.read(authViewModelProvider).user?.id;
       if (uid != null && uid.isNotEmpty) {
         debugPrint(
@@ -175,11 +214,8 @@ class ServiceRequestActionsController
         failure: (message, _) => ServiceRequestActionResult.err(message),
       );
 
-      // Await the publisher tear-down (foreground service + RTDB clear) so
-      // the action's spinner stays up until live-location sharing has
-      // actually stopped. Keeps the "Arrived" transition feeling final and
-      // prevents a tiny window where the homeowner's map could still pull
-      // a stale fix.
+      // Await publisher tear-down (foreground service stop). Last RTDB
+      // coordinates are kept so the homeowner map still shows the final fix.
       if (result.success) {
         try {
           await _ref.read(workerLocationPublisherProvider).stop();

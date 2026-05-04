@@ -12,11 +12,15 @@ class NegotiationOfferCard extends StatelessWidget {
     required this.viewer,
     required this.isLatest,
     required this.showAcceptHint,
+    this.headerSlot,
     this.onAccept,
     this.onCounter,
     this.onReject,
     this.submitting = false,
   });
+
+  /// Shown above the offer row (e.g. live RTDB route map on the latest card).
+  final Widget? headerSlot;
 
   final NegotiationOffer offer;
   final ServiceRequestViewer viewer;
@@ -33,8 +37,7 @@ class NegotiationOfferCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fromWorker = offer.actorRole == NegotiationActor.worker;
-    final accent =
-        fromWorker ? AppColors.primary : AppColors.accent;
+    final accent = fromWorker ? AppColors.primary : AppColors.accent;
     final actorLabel = _actorLabel(viewer, offer.actorRole);
     final hasActionRow =
         onAccept != null || onCounter != null || onReject != null;
@@ -45,9 +48,7 @@ class NegotiationOfferCard extends StatelessWidget {
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isLatest
-              ? accent.withValues(alpha: 0.45)
-              : AppColors.border,
+          color: isLatest ? accent.withValues(alpha: 0.45) : AppColors.border,
           width: isLatest ? 1.5 : 1,
         ),
       ),
@@ -93,8 +94,7 @@ class NegotiationOfferCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             '${formatPkr(offer.amount)} labour + ${formatPkr(offer.visitingFee)} visit',
-            style: AppTypography.bodySmall
-                .copyWith(color: AppColors.textMuted),
+            style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
           ),
           if (showAcceptHint) ...[
             const SizedBox(height: 10),
@@ -118,7 +118,8 @@ class NegotiationOfferCard extends StatelessWidget {
     ServiceRequestViewer viewer,
     NegotiationActor role,
   ) {
-    final mine = (viewer == ServiceRequestViewer.worker &&
+    final mine =
+        (viewer == ServiceRequestViewer.worker &&
             role == NegotiationActor.worker) ||
         (viewer == ServiceRequestViewer.customer &&
             role == NegotiationActor.customer);
@@ -311,8 +312,18 @@ class _ActionRow extends StatelessWidget {
 String _formatDateTime(DateTime? d) {
   if (d == null) return '';
   const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
   final hh = d.hour.toString().padLeft(2, '0');
   final mm = d.minute.toString().padLeft(2, '0');
