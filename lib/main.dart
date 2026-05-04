@@ -13,6 +13,7 @@ import 'package:skilllink/services/chat/chat_service.dart';
 import 'package:skilllink/skillink/data/providers.dart';
 import 'package:skilllink/skillink/routing/completion_prompt_binding.dart';
 import 'package:skilllink/skillink/routing/fcm_binding.dart';
+import 'package:skilllink/skillink/routing/worker_live_location_binding.dart';
 import 'package:skilllink/skillink/config/firebase_options.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_theme.dart'
     as labour_theme;
@@ -67,6 +68,7 @@ class SkillChainApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(fcmBindingProvider);
     ref.watch(completionPromptBindingProvider);
+    ref.watch(workerLiveLocationBindingProvider);
 
     final router = ref.watch(appRouterProvider);
 
@@ -75,6 +77,58 @@ class SkillChainApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: labour_theme.AppTheme.light,
       routerConfig: router,
+      builder: (context, child) {
+        return _ExitConfirmationScope(
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
     );
+  }
+}
+
+class _ExitConfirmationScope extends StatelessWidget {
+  const _ExitConfirmationScope({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return WillPopScope(
+      onWillPop: () => _handleWillPop(context),
+      child: child,
+    );
+  }
+
+  Future<bool> _handleWillPop(BuildContext context) async {
+    final didPopRoute = await Navigator.of(context).maybePop();
+    if (didPopRoute) {
+      return false;
+    }
+
+    final shouldExit =
+        await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) {
+            return AlertDialog(
+              title: const Text('Quit application?'),
+              content: const Text(
+                'Are you sure you want to quit the application?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('No'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('Yes'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+
+    return shouldExit;
   }
 }

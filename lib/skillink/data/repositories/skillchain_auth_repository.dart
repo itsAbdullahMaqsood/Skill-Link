@@ -1,8 +1,10 @@
 import 'dart:io';
 
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:skilllink/core/network/api_exception.dart';
 import 'package:skilllink/models/user.dart' as sc;
 import 'package:skilllink/services/auth_service.dart';
+import 'package:skilllink/services/user_profile_service.dart';
 import 'package:skilllink/skillink/data/repositories/auth_repository.dart';
 import 'package:skilllink/skillink/data/services/api_service.dart';
 import 'package:skilllink/skillink/domain/models/app_user.dart';
@@ -82,9 +84,74 @@ class SkillChainAuthRepository implements AuthRepository {
 
   @override
   Future<Result<AppUser>> updateUserProfile(UserProfileUpdate update) async {
-    return const Failure(
-      'Profile updates happen on the SkillChain (digital) side.',
-    );
+    if (!await _auth.isLabourBackend()) {
+      return const Failure(
+        'Profile updates happen on the SkillChain (digital) side.',
+      );
+    }
+    final current = await _auth.getCurrentUser();
+    if (current == null) {
+      return const Failure('Not signed in.');
+    }
+
+    final mergedName = (update.name ?? current.fullName).trim();
+    if (mergedName.isEmpty) {
+      return const Failure('Name is required.');
+    }
+
+    final mergedLocation = _resolveLabourLocation(update, current).trim();
+    if (mergedLocation.isEmpty) {
+      return const Failure('Location is required.');
+    }
+
+    final age = update.age ?? current.age;
+    final ageForApi = age > 0 ? age : 18;
+    final genderRaw = (update.gender ?? current.gender).trim().toLowerCase();
+    final genderForApi =
+        const {'male', 'female', 'other'}.contains(genderRaw) ? genderRaw : 'other';
+
+    final profile = UserProfileService();
+    try {
+      final userJson = await profile.updateProfile(
+        fullName: mergedName,
+        bio: (update.bio ?? current.bio ?? '').trim(),
+        age: ageForApi,
+        gender: genderForApi,
+        location: mergedLocation,
+        phoneNumber: (update.phone ?? current.phoneNumber).trim(),
+        education: current.education ?? '',
+        offeringSkills: const <String>[],
+        learningSkills: const <String>[],
+        pastExperience:
+            (update.pastExperience ?? current.pastExperience ?? '').trim(),
+        profilePic: update.profilePic,
+        cnicFrontPath: current.cnicFront,
+        cnicBackPath: current.cnicBack,
+        cnicFrontFile: null,
+        cnicBackFile: null,
+      );
+      await _auth.saveUserData(userJson);
+      final u = sc.UserModel.fromJson(userJson);
+      return Success(await _toAppUser(u));
+    } on ApiException catch (e) {
+      return Failure(e.message, e);
+    }
+  }
+
+  String _resolveLabourLocation(UserProfileUpdate update, sc.UserModel current) {
+    final loc = update.location?.trim();
+    if (loc != null && loc.isNotEmpty) return loc;
+    final addr = update.address;
+    if (addr != null) {
+      final parts = <String>[
+        addr.street,
+        addr.area,
+        addr.city,
+        addr.postalCode,
+      ].where((s) => s.trim().isNotEmpty).join(', ');
+      if (parts.isNotEmpty) return parts;
+    }
+    return current.location;
   }
 
   @override

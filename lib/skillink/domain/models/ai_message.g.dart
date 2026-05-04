@@ -27,6 +27,11 @@ _AiMessage _$AiMessageFromJson(Map<String, dynamic> json) => _AiMessage(
   recommendedWorker: json['recommendedWorker'] == null
       ? null
       : Worker.fromJson(json['recommendedWorker'] as Map<String, dynamic>),
+  recommendedWorkers:
+      (json['recommendedWorkers'] as List<dynamic>?)
+          ?.map((e) => Worker.fromJson(e as Map<String, dynamic>))
+          .toList() ??
+      const <Worker>[],
   suggestedTrade: json['suggestedTrade'] as String?,
 );
 
@@ -38,6 +43,7 @@ Map<String, dynamic> _$AiMessageToJson(_AiMessage instance) =>
       'createdAt': instance.createdAt.toIso8601String(),
       'sources': instance.sources,
       'recommendedWorker': instance.recommendedWorker,
+      'recommendedWorkers': instance.recommendedWorkers,
       'suggestedTrade': instance.suggestedTrade,
     };
 

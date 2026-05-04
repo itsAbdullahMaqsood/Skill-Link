@@ -1,11 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:skilllink/Widgets/auth_back_scope.dart';
 import 'package:skilllink/Widgets/auth_shell.dart';
 import 'package:skilllink/core/network/api_exception.dart';
 import 'package:skilllink/core/storage/token_storage.dart';
-import 'package:skilllink/Pages/signup/signup_profile_page.dart';
+import 'package:skilllink/router/app_router.dart';
 import 'package:skilllink/services/signup_api_service.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_colors.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_typography.dart';
@@ -61,18 +62,9 @@ class _SignupOtpPageState extends State<SignupOtpPage> {
       await _tokenStorage.saveTempSignupToken(res.token);
       _expiryTimer?.cancel();
       if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-      });
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => SignupProfilePage(
-            email: widget.email,
-            tempToken: res.token,
-          ),
-        ),
-      );
+      final email = Uri.encodeQueryComponent(widget.email);
+      final token = Uri.encodeQueryComponent(res.token);
+      context.go('$signupProfilePath?email=$email&token=$token');
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {

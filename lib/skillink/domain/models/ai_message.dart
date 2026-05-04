@@ -26,6 +26,7 @@ abstract class AiMessage with _$AiMessage {
     required DateTime createdAt,
     @Default([]) List<AiSource> sources,
     Worker? recommendedWorker,
+    @Default(<Worker>[]) List<Worker> recommendedWorkers,
     String? suggestedTrade,
   }) = _AiMessage;
 

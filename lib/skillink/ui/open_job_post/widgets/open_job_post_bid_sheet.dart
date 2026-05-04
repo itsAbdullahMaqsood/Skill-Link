@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:skilllink/skillink/data/providers.dart';
 import 'package:skilllink/skillink/domain/models/open_job_post.dart';
 import 'package:skilllink/skillink/domain/models/open_job_post_bid.dart';
+import 'package:skilllink/skillink/routing/routes.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_colors.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_typography.dart';
 import 'package:skilllink/skillink/ui/core/ui/app_text_field.dart';
 import 'package:skilllink/skillink/ui/core/ui/primary_button.dart';
 import 'package:skilllink/skillink/ui/open_job_post/view_models/open_job_post_actions_controller.dart';
+import 'package:skilllink/skillink/utils/currency_format.dart';
 
 class OpenJobPostBidSheet extends ConsumerStatefulWidget {
   const OpenJobPostBidSheet({
@@ -41,27 +45,67 @@ class OpenJobPostBidSheet extends ConsumerStatefulWidget {
       _OpenJobPostBidSheetState();
 }
 
+Future<void> _promptSetLocation(BuildContext context) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Set your location'),
+      content: const Text(
+        'Add your service location in your profile before placing a bid. '
+        'Customers see an estimated ETA based on this address.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Not now'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Open profile'),
+        ),
+      ],
+    ),
+  );
+  if (ok != true) return;
+  if (!context.mounted) return;
+  Navigator.of(context).pop(false);
+  context.push(Routes.workerMyProfile);
+}
+
 class _OpenJobPostBidSheetState extends ConsumerState<OpenJobPostBidSheet> {
   late final TextEditingController _amountCtrl;
+  late final TextEditingController _visitCtrl;
   late final TextEditingController _noteCtrl;
 
   @override
   void initState() {
     super.initState();
+    final existing = widget.existingBid;
     _amountCtrl = TextEditingController(
-      text: widget.existingBid != null
-          ? widget.existingBid!.amount.toString()
-          : '',
+      text: existing != null ? existing.amount.toString() : '',
     );
-    _noteCtrl = TextEditingController(text: widget.existingBid?.note ?? '');
+    _visitCtrl = TextEditingController(
+      text: existing != null ? existing.visitingFee.toString() : '',
+    );
+    _noteCtrl = TextEditingController(text: existing?.note ?? '');
+    _amountCtrl.addListener(_refresh);
+    _visitCtrl.addListener(_refresh);
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
     _amountCtrl.dispose();
+    _visitCtrl.dispose();
     _noteCtrl.dispose();
     super.dispose();
   }
+
+  num _parseAmount() => num.tryParse(_amountCtrl.text.trim()) ?? 0;
+  num _parseVisit() => num.tryParse(_visitCtrl.text.trim()) ?? 0;
 
   @override
   Widget build(BuildContext context) {
@@ -72,6 +116,8 @@ class _OpenJobPostBidSheetState extends ConsumerState<OpenJobPostBidSheet> {
         ref.watch(openJobPostActionsControllerProvider(widget.post.id));
     final submitting =
         state.runningAction == OpenJobPostActionKind.submitBid;
+    final expected = widget.post.expectedAmount;
+    final total = _parseAmount() + _parseVisit();
 
     return Padding(
       padding: EdgeInsets.only(
@@ -108,10 +154,35 @@ class _OpenJobPostBidSheetState extends ConsumerState<OpenJobPostBidSheet> {
               style: AppTypography.bodySmall
                   .copyWith(color: AppColors.textMuted),
             ),
+            if (expected != null && expected > 0) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.lightbulb_outline,
+                        size: 18, color: AppColors.primary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Homeowner expects: ${formatPkr(expected)}',
+                        style: AppTypography.bodyMedium
+                            .copyWith(color: AppColors.primary),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
             AppTextField(
               controller: _amountCtrl,
-              label: 'Amount (PKR)',
+              label: 'Labour amount (PKR)',
               hint: 'e.g. 2500',
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: false),
@@ -119,6 +190,35 @@ class _OpenJobPostBidSheetState extends ConsumerState<OpenJobPostBidSheet> {
                 FilteringTextInputFormatter.digitsOnly,
                 LengthLimitingTextInputFormatter(10),
               ],
+            ),
+            const SizedBox(height: 12),
+            AppTextField(
+              controller: _visitCtrl,
+              label: 'Visiting fee (PKR)',
+              hint: 'e.g. 1000',
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: false),
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(10),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Row(
+                children: [
+                  Text('Total', style: AppTypography.bodyMedium),
+                  const Spacer(),
+                  Text(formatPkr(total), style: AppTypography.titleLarge),
+                ],
+              ),
             ),
             const SizedBox(height: 12),
             AppTextField(
@@ -143,18 +243,37 @@ class _OpenJobPostBidSheetState extends ConsumerState<OpenJobPostBidSheet> {
               onPressed: submitting
                   ? null
                   : () async {
-                      final parsed = num.tryParse(_amountCtrl.text.trim());
-                      if (parsed == null || parsed <= 0) {
+                      final me = await ref.read(
+                        currentLabourUserProvider.future,
+                      );
+                      if (!context.mounted) return;
+                      final myLoc = me?.location.trim() ?? '';
+                      if (myLoc.isEmpty) {
+                        await _promptSetLocation(context);
+                        return;
+                      }
+                      final amt = _parseAmount();
+                      final vis = _parseVisit();
+                      if (amt <= 0) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Enter a valid bid amount.'),
+                            content: Text('Enter a valid labour amount.'),
+                          ),
+                        );
+                        return;
+                      }
+                      if (vis < 0) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                                'Visiting fee must be 0 or greater.'),
                           ),
                         );
                         return;
                       }
                       final outcome = await controller.submitBid(
-                        amount: parsed,
-                        currency: 'PKR',
+                        amount: amt,
+                        visitingFee: vis,
                         note: _noteCtrl.text,
                         recentBidDescriptionPreview: widget.post.description,
                       );

@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:skilllink/router/app_router.dart' as app_router;
+import 'package:skilllink/skillink/data/providers.dart';
+import 'package:skilllink/skillink/data/repositories/service_request_repository.dart';
+import 'package:skilllink/skillink/domain/models/open_job_post.dart';
 import 'package:skilllink/skillink/domain/models/user_role.dart';
 import 'package:skilllink/skillink/utils/avatar_url_image.dart';
 import 'package:skilllink/skillink/routing/routes.dart';
@@ -18,6 +21,12 @@ class AppDrawer extends ConsumerWidget {
     final auth = ref.watch(authViewModelProvider);
     final user = auth.user;
     final role = user?.role ?? UserRole.homeowner;
+    final labour = ref.watch(currentLabourUserProvider).valueOrNull;
+    final resolvedAvatarUrl = resolveSkillinkMediaUrl(
+      (labour != null && labour.profileImageUrl.isNotEmpty)
+          ? labour.profileImageUrl
+          : user?.avatarUrl,
+    );
 
     return Drawer(
       backgroundColor: AppColors.surface,
@@ -61,7 +70,7 @@ class AppDrawer extends ConsumerWidget {
                       label: 'Open profile',
                       button: true,
                       child: RoundAvatar(
-                        url: user?.avatarUrl,
+                        url: resolvedAvatarUrl,
                         radius: 35,
                         backgroundColor: Colors.white,
                         placeholder: const Icon(
@@ -355,9 +364,58 @@ class _QuickStats extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final (primaryValue, primaryLabel, primaryIcon) = role == UserRole.worker
-        ? _workerPrimary(ref)
-        : (const _StatPair('—', 'Active Posts'), Icons.article_outlined).asTriple;
+    if (role == UserRole.worker) {
+      final (primaryValue, primaryLabel, primaryIcon) = _workerPrimary(ref);
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        color: AppColors.background,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _StatItem(
+              icon: primaryIcon,
+              value: primaryValue,
+              label: primaryLabel,
+            ),
+            Container(width: 1, height: 40, color: AppColors.border),
+            const _StatItem(
+              icon: Icons.star_outline,
+              value: '—',
+              label: 'Rating',
+            ),
+            Container(width: 1, height: 40, color: AppColors.border),
+            const _StatItem(
+              icon: Icons.check_circle_outline,
+              value: '—',
+              label: 'Completed',
+            ),
+          ],
+        ),
+      );
+    }
+
+    final postsAsync =
+        ref.watch(myOpenJobPostsProvider(ServiceRequestRole.customer));
+    final summaryAsync = ref.watch(homeownerReviewsSummaryProvider);
+
+    final activePosts = postsAsync.when(
+      data: (posts) => _homeownerActiveOpenPostCount(posts).toString(),
+      error: (_, _) => '—',
+      loading: () => '—',
+    );
+    final rating = summaryAsync.when(
+      data: (s) {
+        if (s == null || s.user.reviewCount <= 0) return '—';
+        return s.user.ratings.toStringAsFixed(1);
+      },
+      error: (_, _) => '—',
+      loading: () => '—',
+    );
+    final reviewCount = summaryAsync.when(
+      data: (s) => (s?.user.reviewCount ?? 0).toString(),
+      error: (_, _) => '—',
+      loading: () => '—',
+    );
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -366,23 +424,21 @@ class _QuickStats extends ConsumerWidget {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _StatItem(
-            icon: primaryIcon,
-            value: primaryValue,
-            label: primaryLabel,
+            icon: Icons.article_outlined,
+            value: activePosts,
+            label: 'Active Posts',
           ),
           Container(width: 1, height: 40, color: AppColors.border),
-          const _StatItem(
+          _StatItem(
             icon: Icons.star_outline,
-            value: '—',
+            value: rating,
             label: 'Rating',
           ),
           Container(width: 1, height: 40, color: AppColors.border),
           _StatItem(
-            icon: role == UserRole.worker
-                ? Icons.check_circle_outline
-                : Icons.rate_review_outlined,
-            value: '—',
-            label: role == UserRole.worker ? 'Completed' : 'Reviews',
+            icon: Icons.rate_review_outlined,
+            value: reviewCount,
+            label: 'Reviews',
           ),
         ],
       ),
@@ -396,14 +452,16 @@ class _QuickStats extends ConsumerWidget {
   }
 }
 
-class _StatPair {
-  const _StatPair(this.value, this.label);
-  final String value;
-  final String label;
-}
-
-extension on (_StatPair, IconData) {
-  (String, String, IconData) get asTriple => ($1.value, $1.label, $2);
+int _homeownerActiveOpenPostCount(List<OpenJobPost> posts) {
+  return posts.where((p) {
+    switch (p.status) {
+      case OpenJobPostStatus.openForBids:
+      case OpenJobPostStatus.workerSelected:
+        return true;
+      default:
+        return false;
+    }
+  }).length;
 }
 
 class _StatItem extends StatelessWidget {

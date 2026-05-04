@@ -38,6 +38,7 @@ class OpenJobPostBid {
     required this.id,
     required this.workerId,
     required this.amount,
+    required this.visitingFee,
     required this.currency,
     required this.note,
     required this.status,
@@ -48,9 +49,10 @@ class OpenJobPostBid {
   final String id;
   final String workerId;
   final num amount;
+  final num visitingFee;
   final String currency;
 
-  final String note;
+  final String? note;
 
   final OpenJobPostBidStatus status;
   final DateTime? createdAt;
@@ -66,21 +68,35 @@ class OpenJobPostBid {
         ? amountRaw
         : num.tryParse(amountRaw?.toString() ?? '') ?? 0;
 
+    final visitRaw = root['visitingFee'];
+    final num visitingFee = visitRaw is num
+        ? visitRaw
+        : num.tryParse(visitRaw?.toString() ?? '') ?? 0;
+
     final nestedWorker = root['worker'];
     String workerFromNested = '';
     if (nestedWorker is Map<String, dynamic>) {
       workerFromNested = (nestedWorker['id'] ?? nestedWorker['_id'] ?? '')
           .toString();
     }
+    final noteRaw = (root['note'] ?? '').toString().trim();
+    // Must align with AppUser.id from auth (SkillChain user id) for "my bid" UI.
+    final workerIdRaw = root['workerId'] ??
+        root['worker_id'] ??
+        root['workerUserId'] ??
+        root['worker_user_id'] ??
+        root['bidderId'] ??
+        root['bidder_id'] ??
+        root['userId'] ??
+        root['user_id'] ??
+        workerFromNested;
     return OpenJobPostBid(
       id: (root['id'] ?? root['_id'] ?? '').toString(),
-      workerId: (root['workerId'] ??
-              root['worker_id'] ??
-              workerFromNested)
-          .toString(),
+      workerId: (workerIdRaw ?? '').toString(),
       amount: amount,
+      visitingFee: visitingFee,
       currency: (root['currency'] ?? 'PKR').toString(),
-      note: (root['note'] ?? '').toString(),
+      note: noteRaw.isEmpty ? null : noteRaw,
       status: OpenJobPostBidStatus.fromRaw(root['status'] as String?),
       createdAt: _parseDate(root['createdAt']),
       updatedAt: _parseDate(root['updatedAt']),

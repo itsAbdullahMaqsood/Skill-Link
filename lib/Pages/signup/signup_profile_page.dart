@@ -6,8 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
-
-import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:skilllink/Widgets/auth_back_scope.dart';
 import 'package:skilllink/core/network/api_exception.dart';
@@ -289,6 +287,21 @@ class _SignupProfilePageState extends State<SignupProfilePage> {
     setState(() => _certificates.remove(f));
   }
 
+  void _onLabourServicesChanged(List<SkillItem> selected) {
+    if (!mounted) return;
+    setState(() => _labourSelectedServices = selected);
+  }
+
+  void _onOfferingSkillsChanged(List<SkillItem> selected) {
+    if (!mounted) return;
+    setState(() => _offeringSkills = selected);
+  }
+
+  void _onLearningSkillsChanged(List<SkillItem> selected) {
+    if (!mounted) return;
+    setState(() => _learningSkills = selected);
+  }
+
   Future<void> _submit() async {
     _errorMessage = null;
     if (!_formKey.currentState!.validate()) return;
@@ -373,11 +386,9 @@ class _SignupProfilePageState extends State<SignupProfilePage> {
       await app_router.reloadSkillPrefs(container);
 
       if (!mounted) return;
-      setState(() => _isLoading = false);
-      context.go(app_router.postLoginLanding(
-        app_router.currentSkillType(),
-        app_router.currentLabourRole(),
-      ));
+      // Router refresh after auth persistence handles post-login landing.
+      // Avoid a second explicit navigation that can race with teardown.
+      return;
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -580,14 +591,9 @@ class _SignupProfilePageState extends State<SignupProfilePage> {
                                     ),
                                   )
                                 : DropdownSearch<SkillItem>.multiSelection(
-                                    key: ValueKey(
-                                      'labour_svc_${_labourServiceCatalog.length}',
-                                    ),
                                     items: _labourServiceCatalog,
                                     selectedItems: _labourSelectedServices,
-                                    onChanged: (v) => setState(
-                                      () => _labourSelectedServices = v,
-                                    ),
+                                    onChanged: _onLabourServicesChanged,
                                     itemAsString: (s) => s.name,
                                     compareFn: (a, b) => a.id == b.id,
                                     dropdownDecoratorProps:
@@ -654,13 +660,9 @@ class _SignupProfilePageState extends State<SignupProfilePage> {
                                   ),
                                 )
                               : DropdownSearch<SkillItem>.multiSelection(
-                                  key: ValueKey(
-                                    'offering_${_skillsCache?.length ?? 0}',
-                                  ),
                                   items: _skillsCache ?? [],
                                   selectedItems: _offeringSkills,
-                                  onChanged: (v) =>
-                                      setState(() => _offeringSkills = v),
+                                  onChanged: _onOfferingSkillsChanged,
                                   itemAsString: (s) => s.name,
                                   compareFn: (a, b) => a.id == b.id,
                                   dropdownDecoratorProps:
@@ -684,13 +686,9 @@ class _SignupProfilePageState extends State<SignupProfilePage> {
                         ),
                         const SizedBox(height: 6),
                         DropdownSearch<SkillItem>.multiSelection(
-                          key: ValueKey(
-                            'learning_${_skillsCache?.length ?? 0}',
-                          ),
                           items: _skillsCache ?? [],
                           selectedItems: _learningSkills,
-                          onChanged: (v) =>
-                              setState(() => _learningSkills = v),
+                          onChanged: _onLearningSkillsChanged,
                           itemAsString: (s) => s.name,
                           compareFn: (a, b) => a.id == b.id,
                           dropdownDecoratorProps: DropDownDecoratorProps(

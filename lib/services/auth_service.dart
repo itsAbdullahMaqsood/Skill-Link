@@ -407,7 +407,32 @@ class AuthService {
 
   Future<UserModel?> refreshCurrentUserFromApi() async {
     if (await isLabourBackend()) {
-      return getCurrentUser();
+      final stored = await getStoredUserData();
+      final id = (stored?['id'] ?? stored?['_id'])?.toString().trim() ?? '';
+      if (id.isEmpty) return getCurrentUser();
+      try {
+        final res = await SkillinkApiService.instance.get('/workers/$id');
+        final raw = res.data;
+        if (raw is! Map) return getCurrentUser();
+        var payload = Map<String, dynamic>.from(raw);
+        final workerNested = payload['worker'];
+        if (workerNested is Map<String, dynamic>) {
+          payload = Map<String, dynamic>.from(workerNested);
+        }
+        final userNested = payload['user'];
+        if (userNested is Map<String, dynamic>) {
+          await saveUserData(Map<String, dynamic>.from(userNested));
+        } else {
+          await saveUserData(payload);
+        }
+        // Do NOT call bumpAuthChange() here — this method is invoked by
+        // reloadSession() which already updates authViewModelProvider.
+        // Bumping the epoch would fire _AuthRefresh → reloadSession → here
+        // again, creating an infinite loop of /workers/$id requests.
+        return getCurrentUser();
+      } on DioException {
+        return getCurrentUser();
+      }
     }
     final stored = await getStoredUserData();
     final id = (stored?['id'] ?? stored?['_id'])?.toString().trim() ?? '';
@@ -427,6 +452,18 @@ class AuthService {
   }
 
   Future<void> saveUserData(Map<String, dynamic> user) async {
+    final existing = await getStoredUserData();
+    if (existing != null && existing.isNotEmpty) {
+      final merged = Map<String, dynamic>.from(existing);
+      // Write every key present in the new payload — including explicit nulls
+      // so server-cleared fields (e.g. deleted CNIC images) clear locally.
+      // Keys absent from `user` keep their existing value (partial payloads).
+      for (final e in user.entries) {
+        merged[e.key] = e.value;
+      }
+      await _storage.write(key: _userDataKey, value: jsonEncode(merged));
+      return;
+    }
     await _storage.write(key: _userDataKey, value: jsonEncode(user));
   }
 

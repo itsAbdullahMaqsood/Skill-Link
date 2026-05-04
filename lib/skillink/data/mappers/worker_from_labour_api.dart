@@ -108,6 +108,11 @@ Worker workerFromLabourApiJson(Map<String, dynamic> raw) {
 
   final id = _labourId(json['id'] ?? json['_id']);
 
+  final locationRaw = json['location'];
+  final location = locationRaw is String && locationRaw.trim().isNotEmpty
+      ? locationRaw.trim()
+      : null;
+
   return Worker(
     id: id,
     name: name,
@@ -124,5 +129,6 @@ Worker workerFromLabourApiJson(Map<String, dynamic> raw) {
     accountStatus:
         (accountStatus == null || accountStatus.isEmpty) ? null : accountStatus,
     experienceNote: experienceNote,
+    location: location,
   );
 }

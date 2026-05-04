@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:skilllink/skillink/config/app_constants.dart';
 import 'package:skilllink/skillink/domain/models/service_request.dart';
 import 'package:skilllink/skillink/domain/models/user_role.dart';
 import 'package:skilllink/skillink/routing/routes.dart';
@@ -371,16 +370,4 @@ class _InfoLine extends StatelessWidget {
   }
 }
 
-String? _resolveAvatar(String? path) {
-  if (path == null) return null;
-  final trimmed = path.trim();
-  if (trimmed.isEmpty) return null;
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-    return trimmed;
-  }
-  final base = AppConstants.apiBaseUrl;
-  final trimmedBase =
-      base.endsWith('/') ? base.substring(0, base.length - 1) : base;
-  final suffix = trimmed.startsWith('/') ? trimmed : '/$trimmed';
-  return '$trimmedBase$suffix';
-}
+String? _resolveAvatar(String? path) => resolveSkillinkMediaUrl(path);

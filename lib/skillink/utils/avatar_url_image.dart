@@ -2,7 +2,54 @@ import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:skilllink/services/api_service.dart';
+import 'package:skilllink/skillink/config/app_constants.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_colors.dart';
+
+/// Turns labour API relative paths into absolute URLs; leaves http(s) unchanged.
+String? resolveSkillinkMediaUrl(String? path) {
+  if (path == null) return null;
+  final trimmed = path.trim();
+  if (trimmed.isEmpty) return null;
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed;
+  }
+  final base = AppConstants.apiBaseUrl;
+  final trimmedBase =
+      base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+  final suffix = trimmed.startsWith('/') ? trimmed : '/$trimmed';
+  return '$trimmedBase$suffix';
+}
+
+/// Resolves relative media paths against whichever backend is currently active
+/// (digital SkillChain vs labour SkillLink), using [ApiService.activeAssetBaseUrl].
+/// Leaves absolute http(s) URLs unchanged. Useful for avatars that may originate
+/// from either backend (e.g. chat participants).
+String? resolveActiveBackendMediaUrl(String? path) {
+  if (path == null) return null;
+  final raw = path.trim();
+  if (raw.isEmpty) return null;
+
+  // If the string accidentally has another URL embedded (e.g. concatenated),
+  // strip everything before the embedded http(s) prefix.
+  final httpIndex = raw.indexOf('http://');
+  final httpsIndex = raw.indexOf('https://');
+  final embeddedIndex = httpIndex == -1
+      ? httpsIndex
+      : (httpsIndex == -1
+          ? httpIndex
+          : (httpIndex < httpsIndex ? httpIndex : httpsIndex));
+  if (embeddedIndex > 0) return raw.substring(embeddedIndex);
+
+  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+  if (raw.startsWith('//')) return 'https:$raw';
+
+  final base = ApiService.activeAssetBaseUrl;
+  final trimmedBase =
+      base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+  final suffix = raw.startsWith('/') ? raw : '/$raw';
+  return '$trimmedBase$suffix';
+}
 
 ImageProvider? avatarBackgroundImageProvider(String? url) {
   if (url == null || url.isEmpty) return null;

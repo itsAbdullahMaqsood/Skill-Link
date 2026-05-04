@@ -197,6 +197,16 @@ class _EditProfilePageState extends State<EditProfilePage> {
     setState(() => _certificates.remove(f));
   }
 
+  void _onOfferingSkillsChanged(List<SkillItem> selected) {
+    if (!mounted) return;
+    setState(() => _offeringSkills = selected);
+  }
+
+  void _onLearningSkillsChanged(List<SkillItem> selected) {
+    if (!mounted) return;
+    setState(() => _learningSkills = selected);
+  }
+
   Future<void> _saveProfile() async {
     final fullName = _fullNameController.text.trim();
     final phoneNumber = _phoneNumberController.text.trim();
@@ -445,7 +455,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                       : DropdownSearch<SkillItem>.multiSelection(
                           items: _skillsCache ?? [],
                           selectedItems: _offeringSkills,
-                          onChanged: (v) => setState(() => _offeringSkills = v),
+                          onChanged: _onOfferingSkillsChanged,
                           itemAsString: (s) => s.name,
                           compareFn: (a, b) => a.id == b.id,
                           dropdownDecoratorProps: DropDownDecoratorProps(
@@ -470,7 +480,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   : DropdownSearch<SkillItem>.multiSelection(
                       items: _skillsCache ?? [],
                       selectedItems: _learningSkills,
-                      onChanged: (v) => setState(() => _learningSkills = v),
+                      onChanged: _onLearningSkillsChanged,
                       itemAsString: (s) => s.name,
                       compareFn: (a, b) => a.id == b.id,
                       dropdownDecoratorProps: DropDownDecoratorProps(

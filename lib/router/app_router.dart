@@ -8,6 +8,8 @@ import 'package:skilllink/Pages/forgot%20password/forgot_password_screen.dart';
 import 'package:skilllink/Pages/home/home_shell.dart';
 import 'package:skilllink/Pages/login/login_page.dart';
 import 'package:skilllink/Pages/signup/signup_email_page.dart';
+import 'package:skilllink/Pages/signup/signup_otp_page.dart';
+import 'package:skilllink/Pages/signup/signup_profile_page.dart';
 import 'package:skilllink/Pages/splash_screen.dart';
 import 'package:skilllink/splash_screen.dart';
 import 'package:skilllink/core/auth/auth_change_notifier.dart';
@@ -22,6 +24,7 @@ import 'package:skilllink/skillink/ui/booking/widgets/booking_screen.dart';
 import 'package:skilllink/skillink/ui/booking/widgets/booking_success_screen.dart';
 import 'package:skilllink/skillink/ui/chat/widgets/chat_list_screen.dart';
 import 'package:skilllink/skillink/ui/chat/widgets/chat_thread_screen.dart';
+import 'package:skilllink/skillink/ui/chat/widgets/peer_profile_screen.dart';
 import 'package:skilllink/skillink/ui/completion_report/widgets/completion_prompt_screen.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_colors.dart';
 import 'package:skilllink/skillink/ui/ai_chat/widgets/ai_chat_screen.dart';
@@ -40,6 +43,7 @@ import 'package:skilllink/skillink/ui/marketplace/widgets/worker_profile_screen.
 import 'package:skilllink/skillink/ui/my_posts/widgets/my_posts_screen.dart';
 import 'package:skilllink/skillink/ui/my_posts/widgets/posted_job_detail_screen.dart';
 import 'package:skilllink/skillink/ui/notifications/widgets/notifications_screen.dart';
+import 'package:skilllink/skillink/ui/profile/widgets/my_reviews_screen.dart';
 import 'package:skilllink/skillink/ui/open_job_post/widgets/discover_open_jobs_screen.dart';
 import 'package:skilllink/skillink/ui/open_job_post/widgets/open_job_post_detail_screen.dart';
 import 'package:skilllink/skillink/ui/open_job_post/widgets/open_job_post_screen.dart';
@@ -58,12 +62,15 @@ import 'package:skilllink/skillink/ui/worker_home/widgets/worker_job_detail_scre
 import 'package:skilllink/skillink/ui/worker_home/widgets/worker_jobs_screen.dart';
 import 'package:skilllink/skillink/ui/worker_home/widgets/worker_marketplace_screen.dart';
 import 'package:skilllink/skillink/ui/worker_home/widgets/worker_ongoing_jobs_screen.dart';
+import 'package:skilllink/skillink/ui/worker_home/widgets/worker_my_profile_screen.dart';
 import 'package:skilllink/skillink/ui/worker_home/widgets/worker_profile_screen_edit.dart';
 import 'package:skilllink/skillink/ui/worker_home/widgets/worker_shell_screen.dart';
 
 const splashPath = '/';
 const loginPath = '/login';
 const signupPath = '/signup';
+const signupOtpPath = '/signup/otp';
+const signupProfilePath = '/signup/profile';
 const forgotPasswordPath = '/forgot-password';
 const skillTypePath = '/skill-type';
 const digitalHomePath = '/digital';
@@ -87,6 +94,7 @@ bool _isLabourPath(String path) {
       path == Routes.profileEdit ||
       path == Routes.helpSupport ||
       path == Routes.notifications ||
+      path == Routes.myReviews ||
       path == Routes.about ||
       path == Routes.myPosts ||
       path == Routes.myBids ||
@@ -248,6 +256,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const SignupEmailPage(),
       ),
       GoRoute(
+        path: signupOtpPath,
+        name: 'signupOtp',
+        builder: (_, state) {
+          final email = state.uri.queryParameters['email']?.trim() ?? '';
+          if (email.isEmpty) return const SignupEmailPage();
+          return SignupOtpPage(email: email);
+        },
+      ),
+      GoRoute(
+        path: signupProfilePath,
+        name: 'signupProfile',
+        builder: (_, state) {
+          final email = state.uri.queryParameters['email']?.trim() ?? '';
+          final tempToken = state.uri.queryParameters['token']?.trim() ?? '';
+          if (email.isEmpty || tempToken.isEmpty) {
+            return const SignupEmailPage();
+          }
+          return SignupProfilePage(email: email, tempToken: tempToken);
+        },
+      ),
+      GoRoute(
         path: forgotPasswordPath,
         name: 'forgotPassword',
         builder: (_, __) => const ForgotPasswordScreen(),
@@ -293,6 +322,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: Routes.notifications,
         name: 'notifications',
         builder: (_, __) => const NotificationsScreen(),
+      ),
+      GoRoute(
+        path: Routes.myReviews,
+        name: 'myReviews',
+        builder: (_, __) => const MyReviewsScreen(),
       ),
       GoRoute(
         path: Routes.about,
@@ -368,7 +402,28 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final id = state.pathParameters['id'] ?? '';
           final hideBookRaw = state.uri.queryParameters['hideBook'];
           final hideBook = hideBookRaw == '1' || hideBookRaw == 'true';
-          return WorkerProfileScreen(workerId: id, hideBookButton: hideBook);
+          final hideMessageRaw = state.uri.queryParameters['hideMessage'];
+          final hideMessage =
+              hideMessageRaw == '1' || hideMessageRaw == 'true';
+          return WorkerProfileScreen(
+            workerId: id,
+            hideBookButton: hideBook,
+            hideMessageButton: hideMessage,
+          );
+        },
+      ),
+      GoRoute(
+        path: Routes.peerProfilePath,
+        name: 'peerProfile',
+        builder: (_, state) {
+          final args = state.extra is PeerProfileArgs
+              ? state.extra as PeerProfileArgs
+              : PeerProfileArgs(
+                  peerId: state.pathParameters['peerId'] ?? '',
+                  peerName: 'User',
+                  peerRole: UserRole.homeowner,
+                );
+          return PeerProfileScreen(args: args);
         },
       ),
       GoRoute(
@@ -555,12 +610,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: Routes.workerMyProfile,
-                name: 'workerProfileEdit',
-                builder: (_, __) => const WorkerProfileEditScreen(),
+                name: 'workerMyProfile',
+                builder: (_, __) => const WorkerMyProfileScreen(),
               ),
             ],
           ),
         ],
+      ),
+      GoRoute(
+        path: Routes.workerMyProfileEdit,
+        name: 'workerProfileFormEdit',
+        builder: (_, __) => const WorkerProfileEditScreen(),
       ),
       GoRoute(
         path: Routes.workerEarnings,
@@ -606,6 +666,8 @@ class _AnomalyRouterHolder {
 }
 
 class _AuthRefresh extends ChangeNotifier {
+  bool _reloading = false;
+
   _AuthRefresh(Ref ref) {
     ref.listen<AuthState>(
       authViewModelProvider,
@@ -615,7 +677,11 @@ class _AuthRefresh extends ChangeNotifier {
     final skillRefresh = ref.read(_skillPrefsRefreshProvider);
     skillRefresh.addListener(notifyListeners);
     void onAuthEpochChanged() {
-      unawaited(ref.read(authViewModelProvider.notifier).reloadSession());
+      if (_reloading) return;
+      _reloading = true;
+      ref.read(authViewModelProvider.notifier).reloadSession().whenComplete(() {
+        _reloading = false;
+      });
       notifyListeners();
     }
     authChangeNotifier.addListener(onAuthEpochChanged);

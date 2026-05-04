@@ -21,9 +21,20 @@ class SocketIoChatRepository implements ChatRepository {
   @override
   Stream<List<ChatSummary>> watchUserChats(String userId) async* {
     await _chat.initialize();
+    // Ensure the StreamProvider stays in its loading state until the inbox
+    // has actually been fetched at least once. Without this, the cached
+    // (often empty) in-memory map is yielded immediately and the UI flashes
+    // an "No conversations yet" empty state before real data arrives.
+    await _chat.refreshInbox();
     yield* _chat.watchConversations().map(
           (list) => list.map(_summaryFromPreview).toList(),
         );
+  }
+
+  @override
+  Future<void> refreshUserChats(String userId) async {
+    await _chat.initialize();
+    await _chat.refreshInbox();
   }
 
   @override

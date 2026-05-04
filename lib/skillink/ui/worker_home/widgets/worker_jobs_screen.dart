@@ -12,6 +12,7 @@ import 'package:skilllink/skillink/routing/routes.dart';
 import 'package:skilllink/skillink/ui/auth/view_models/auth_view_model.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_colors.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_typography.dart';
+import 'package:skilllink/skillink/utils/currency_format.dart';
 import 'package:skilllink/skillink/ui/core/ui/empty_state.dart';
 import 'package:skilllink/skillink/ui/core/ui/job_status_chip.dart';
 import 'package:skilllink/skillink/ui/core/ui/loading_shimmer.dart';
@@ -25,11 +26,11 @@ import 'package:skilllink/skillink/utils/text_format.dart';
 const _kInlineRequestCap = 3;
 const _kRecentBidsCap = 3;
 
-ServiceRequest? _pickPrimaryWorkerOngoingRequest(List<ServiceRequest> list) {
+List<ServiceRequest> _collectWorkerOngoingRequests(List<ServiceRequest> list) {
   final candidates = list
       .where((r) => r.showsAsWorkerOngoingJob)
-      .toList(growable: false);
-  if (candidates.isEmpty) return null;
+      .toList();
+  if (candidates.isEmpty) return const <ServiceRequest>[];
   int rank(ServiceRequestStatus s) => switch (s) {
     ServiceRequestStatus.inProgress => 5,
     ServiceRequestStatus.arrived => 4,
@@ -48,7 +49,7 @@ ServiceRequest? _pickPrimaryWorkerOngoingRequest(List<ServiceRequest> list) {
     if (bu == null) return -1;
     return bu.compareTo(au);
   });
-  return candidates.first;
+  return candidates;
 }
 
 String _jobStatusChipKeyForServiceRequest(ServiceRequestStatus s) {
@@ -79,14 +80,14 @@ class WorkerJobsScreen extends ConsumerWidget {
     final srAsync = ref.watch(
       myServiceRequestsProvider(ServiceRequestRole.worker),
     );
-    final activeServiceRequest = srAsync.maybeWhen(
+    final activeServiceRequests = srAsync.maybeWhen(
       data: (list) {
         final forPick = state.activeJob != null
             ? list.where((r) => !awardedSrIds.contains(r.id)).toList()
             : list;
-        return _pickPrimaryWorkerOngoingRequest(forPick);
+        return _collectWorkerOngoingRequests(forPick);
       },
-      orElse: () => null,
+      orElse: () => const <ServiceRequest>[],
     );
 
     return Scaffold(
@@ -140,25 +141,19 @@ class WorkerJobsScreen extends ConsumerWidget {
                   const SizedBox(height: 20),
 
                   if (state.activeJob != null ||
-                      activeServiceRequest != null) ...[
-                    const _SectionHeader(title: 'In Progress Job'),
+                      activeServiceRequests.isNotEmpty) ...[
+                    _SectionHeader(
+                      title: activeServiceRequests.length +
+                                  (state.activeJob != null ? 1 : 0) >
+                              1
+                          ? 'In Progress Jobs'
+                          : 'In Progress Job',
+                    ),
                     const SizedBox(height: 8),
-                    if (state.activeJob != null)
-                      _ActiveJobCard(
-                        job: state.activeJob!,
-                        onTap: () => context.push(
-                          Routes.workerJobDetail(state.activeJob!.jobId),
-                        ),
-                      ),
-                    if (state.activeJob != null && activeServiceRequest != null)
-                      const SizedBox(height: 10),
-                    if (activeServiceRequest != null)
-                      _ActiveServiceRequestCard(
-                        request: activeServiceRequest,
-                        onTap: () => context.push(
-                          Routes.receivedRequestDetail(activeServiceRequest.id),
-                        ),
-                      ),
+                    _InProgressJobsRow(
+                      activeJob: state.activeJob,
+                      requests: activeServiceRequests,
+                    ),
                     const SizedBox(height: 20),
                   ],
 
@@ -271,6 +266,64 @@ class _SectionHeader extends StatelessWidget {
         const Spacer(),
         ?trailing,
       ],
+    );
+  }
+}
+
+class _InProgressJobsRow extends StatelessWidget {
+  const _InProgressJobsRow({required this.activeJob, required this.requests});
+
+  final Job? activeJob;
+  final List<ServiceRequest> requests;
+
+  @override
+  Widget build(BuildContext context) {
+    final totalCount = (activeJob != null ? 1 : 0) + requests.length;
+    if (totalCount == 0) return const SizedBox.shrink();
+
+    final screenWidth = MediaQuery.of(context).size.width;
+    // Section sits inside the parent ListView's 20px horizontal padding.
+    final available = screenWidth - 40;
+    // One card fills the section; multiple cards peek the next one.
+    final cardWidth = totalCount == 1
+        ? available
+        : (available - 12) * 0.88;
+
+    final children = <Widget>[];
+    if (activeJob != null) {
+      children.add(SizedBox(
+        width: cardWidth,
+        child: _ActiveJobCard(
+          job: activeJob!,
+          onTap: () => context.push(Routes.workerJobDetail(activeJob!.jobId)),
+        ),
+      ));
+    }
+    for (final req in requests) {
+      children.add(SizedBox(
+        width: cardWidth,
+        child: _ActiveServiceRequestCard(
+          request: req,
+          onTap: () => context.push(Routes.receivedRequestDetail(req.id)),
+        ),
+      ));
+    }
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: totalCount == 1
+          ? const NeverScrollableScrollPhysics()
+          : const BouncingScrollPhysics(),
+      clipBehavior: Clip.none,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            children[i],
+            if (i < children.length - 1) const SizedBox(width: 12),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -610,7 +663,7 @@ class _LocalRecentOpenJobBidTile extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  '${bid.currency} ${bid.amount}',
+                  formatPkr(bid.amount + bid.visitingFee),
                   style: AppTypography.labelMedium.copyWith(
                     color: fg,
                     fontSize: 11,

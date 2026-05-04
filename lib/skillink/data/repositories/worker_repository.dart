@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:skilllink/skillink/config/app_constants.dart';
 import 'package:skilllink/skillink/domain/models/job.dart';
 import 'package:skilllink/skillink/domain/models/job_status.dart';
-import 'package:skilllink/skillink/domain/models/review.dart';
 import 'package:skilllink/skillink/domain/models/service_request.dart';
 import 'package:skilllink/skillink/domain/models/worker.dart';
 import 'package:skilllink/skillink/utils/result.dart';
@@ -138,9 +137,6 @@ abstract class WorkerRepository {
   Future<Result<List<Worker>>> searchWorkers(WorkerSearchFilter filter);
 
   Future<Result<Worker>> getWorker(String id);
-
-  Future<Result<List<Review>>> getReviews(String workerId, {int page = 1});
-
 
   Future<Result<Worker>> getMyProfile();
 
@@ -303,11 +299,11 @@ String _serviceTypeLabelForRequest(ServiceRequest r) {
 double _grossForServiceRequest(ServiceRequest r) {
   final a = r.acceptedBid;
   if (a != null) {
-    return a.amount.toDouble();
+    return a.total.toDouble();
   }
   final best = r.latestOffer;
   if (best != null) {
-    return best.amount.toDouble();
+    return best.total.toDouble();
   }
   return 0;
 }

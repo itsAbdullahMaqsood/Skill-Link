@@ -127,6 +127,7 @@ class SentRequestTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
+            color: AppColors.surface,
             borderRadius: BorderRadius.circular(14),
             boxShadow: [
               BoxShadow(

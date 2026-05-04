@@ -129,6 +129,14 @@ class _NewOfferScreenState extends State<NewOfferScreen> {
     });
   }
 
+  void _onSkillMultiSelectChanged(
+    List<SkillItem> selected,
+    void Function(List<String>) onChanged,
+  ) {
+    if (!mounted) return;
+    onChanged(selected.map((e) => e.id).toList());
+  }
+
   Map<String, dynamic> _buildPayload() {
     final payload = <String, dynamic>{
       'title': _state.title,
@@ -593,7 +601,7 @@ class _NewOfferScreenState extends State<NewOfferScreen> {
         DropdownSearch<SkillItem>.multiSelection(
           items: items,
           selectedItems: selected,
-          onChanged: (v) => onChanged(v.map((e) => e.id).toList()),
+          onChanged: (v) => _onSkillMultiSelectChanged(v, onChanged),
           itemAsString: (s) => s.name,
           compareFn: (a, b) => a.id == b.id,
           dropdownDecoratorProps: DropDownDecoratorProps(

@@ -3,7 +3,6 @@ import 'package:skilllink/skillink/data/services/api_service.dart';
 import 'package:skilllink/skillink/domain/models/job.dart';
 import 'package:skilllink/skillink/domain/models/structured_address.dart';
 import 'package:skilllink/skillink/domain/models/job_status.dart';
-import 'package:skilllink/skillink/domain/models/review.dart';
 import 'package:skilllink/skillink/utils/error_mapper.dart';
 import 'package:skilllink/skillink/utils/result.dart';
 
@@ -189,27 +188,6 @@ class RemoteJobRepository implements JobRepository {
       return Failure(ErrorMapper.fromException(e), e);
     }
   }
-
-  @override
-  Future<Result<Review>> submitReview({
-    required String jobId,
-    required double rating,
-    String? comment,
-  }) async {
-    try {
-      final res = await _api.post<Map<String, dynamic>>(
-        '/jobs/$jobId/reviews',
-        data: <String, dynamic>{
-          'rating': rating,
-          if (comment != null && comment.isNotEmpty) 'comment': comment,
-        },
-      );
-      return Success(Review.fromJson(res.data!));
-    } on Exception catch (e) {
-      return Failure(ErrorMapper.fromException(e), e);
-    }
-  }
-
 
   @override
   Stream<Job> watchJob(String jobId) {

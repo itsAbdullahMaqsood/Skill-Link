@@ -14,8 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$InAppNotification {
 
- String get id; String get title; String get body; InAppNotificationType get type;/// Job id, anomaly id, or empty for system.
- String get targetId; DateTime get createdAt; bool get read;
+ String get id; String get title; String get body; InAppNotificationType get type; String get targetId; DateTime get createdAt; bool get read;
 /// Create a copy of InAppNotification
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -220,7 +219,6 @@ class _InAppNotification implements InAppNotification {
 @override final  String title;
 @override final  String body;
 @override final  InAppNotificationType type;
-/// Job id, anomaly id, or empty for system.
 @override final  String targetId;
 @override final  DateTime createdAt;
 @override@JsonKey() final  bool read;

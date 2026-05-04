@@ -50,16 +50,39 @@ class UnifiedCompletionReportRepository implements CompletionReportRepository {
     return controller.stream;
   }
 
+  final _pendingController =
+      StreamController<List<PendingCompletionReport>>.broadcast();
+
+  /// Recompute the pending list and push it to listeners.
+  /// Called after [openReport] or [_submit] so we only hit the network
+  /// when something actually changed — no idle polling.
+  Future<void> _refreshPending() async {
+    if (_lastPendingUserId == null || _lastPendingRole == null) return;
+    final list = await _computePending(
+      userId: _lastPendingUserId!,
+      role: _lastPendingRole!,
+    );
+    if (!_pendingController.isClosed) _pendingController.add(list);
+  }
+
+  String? _lastPendingUserId;
+  UserRole? _lastPendingRole;
+
   @override
   Stream<List<PendingCompletionReport>> watchPendingForUser({
     required String userId,
     required UserRole role,
   }) async* {
-    yield await _computePending(userId: userId, role: role);
-    while (true) {
-      await Future<void>.delayed(const Duration(seconds: 2));
-      yield await _computePending(userId: userId, role: role);
-    }
+    // TODO(perf): re-enable once the infinite-loop fixes are verified stable.
+    // For now, skip the initial network call too — just emit an empty list
+    // so the stream stays alive without hitting /request-services or /jobs.
+    _lastPendingUserId = userId;
+    _lastPendingRole = role;
+    yield const <PendingCompletionReport>[];
+    yield* _pendingController.stream;
+    // Original:
+    // yield await _computePending(userId: userId, role: role);
+    // yield* _pendingController.stream;
   }
 
   Future<List<PendingCompletionReport>> _computePending({
@@ -142,6 +165,7 @@ class UnifiedCompletionReportRepository implements CompletionReportRepository {
     final report = CompletionReport(jobId: jobId, createdAt: createdAt);
     _reports[jobId] = report;
     _emitWatch(jobId);
+    unawaited(_refreshPending());
     return Success(report);
   }
 
@@ -197,10 +221,12 @@ class UnifiedCompletionReportRepository implements CompletionReportRepository {
 
     _reports[jobId] = report;
     _emitWatch(jobId);
+    unawaited(_refreshPending());
     return Success(report);
   }
 
   void dispose() {
+    if (!_pendingController.isClosed) _pendingController.close();
     for (final c in _watchControllers.values) {
       if (!c.isClosed) c.close();
     }

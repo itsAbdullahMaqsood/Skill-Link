@@ -70,47 +70,78 @@ class _RateWorkerScreenState extends ConsumerState<RateWorkerScreen> {
         body: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'How was the job?',
-                  style: AppTypography.headlineSmall,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Your rating stays anonymous. The worker only sees the score.',
-                  style: AppTypography.bodySmall
-                      .copyWith(color: AppColors.textMuted),
-                ),
-                const SizedBox(height: 24),
-                Center(
-                  child: _StarRow(
-                    rating: state.rating,
-                    onChanged: vm.setRating,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                AppTextField(
-                  label: 'Leave a comment (optional)',
-                  controller: _commentCtrl,
-                  hint: 'e.g. Arrived on time, explained the issue clearly…',
-                  maxLines: 4,
-                  onChanged: vm.setComment,
-                ),
-                const Spacer(),
-                SizedBox(
-                  width: double.infinity,
-                  child: PrimaryButton(
-                    label: 'Submit review',
-                    isLoading: state.isSubmitting,
-                    onPressed: state.canSubmit && !state.isSubmitting
-                        ? () => vm.submit()
-                        : null,
-                  ),
-                ),
-              ],
-            ),
+            child: state.isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : state.alreadyReviewed
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.check_circle_rounded,
+                                size: 64, color: AppColors.accent),
+                            const SizedBox(height: 16),
+                            Text('You already reviewed this job.',
+                                style: AppTypography.headlineSmall),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Thanks for your feedback.',
+                              style: AppTypography.bodySmall
+                                  .copyWith(color: AppColors.textMuted),
+                            ),
+                            const SizedBox(height: 24),
+                            SizedBox(
+                              width: double.infinity,
+                              child: PrimaryButton(
+                                label: 'Done',
+                                onPressed: () =>
+                                    context.go(Routes.homeownerHome),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'How was the job?',
+                            style: AppTypography.headlineSmall,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Your rating stays anonymous. The worker only sees the score.',
+                            style: AppTypography.bodySmall
+                                .copyWith(color: AppColors.textMuted),
+                          ),
+                          const SizedBox(height: 24),
+                          Center(
+                            child: _StarRow(
+                              rating: state.rating,
+                              onChanged: vm.setRating,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          AppTextField(
+                            label: 'Leave a comment (optional)',
+                            controller: _commentCtrl,
+                            hint:
+                                'e.g. Arrived on time, explained the issue clearly…',
+                            maxLines: 4,
+                            onChanged: vm.setComment,
+                          ),
+                          const Spacer(),
+                          SizedBox(
+                            width: double.infinity,
+                            child: PrimaryButton(
+                              label: 'Submit review',
+                              isLoading: state.isSubmitting,
+                              onPressed: state.canSubmit && !state.isSubmitting
+                                  ? () => vm.submit()
+                                  : null,
+                            ),
+                          ),
+                        ],
+                      ),
           ),
         ),
       ),

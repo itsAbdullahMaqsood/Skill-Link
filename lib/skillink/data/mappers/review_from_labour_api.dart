@@ -1,96 +1,68 @@
 import 'package:skilllink/skillink/domain/models/review.dart';
+import 'package:skilllink/skillink/domain/models/reviews_summary.dart';
 
-String _str(dynamic v) {
-  if (v == null) return '';
-  final s = v.toString().trim();
-  return s;
-}
-
-Review? reviewFromLabourApiJson(Map<String, dynamic> json) {
-  try {
-    final id = _str(json['id'] ?? json['_id']);
-    if (id.isEmpty) return null;
-
-    var jobId = _str(json['jobId'] ?? json['job_id']);
-    if (jobId.isEmpty) {
-      final job = json['job'];
-      if (job is Map) {
-        jobId = _str(job['id'] ?? job['_id']);
-      }
-    }
-    if (jobId.isEmpty) jobId = '-';
-
-    final ratingRaw = json['rating'] ?? json['stars'] ?? json['score'];
-    final rating = ratingRaw is num
-        ? ratingRaw.toDouble()
-        : double.tryParse(_str(ratingRaw)) ?? 0.0;
-
-    final comment = _nullableStr(
-      json['comment'] ?? json['text'] ?? json['message'] ?? json['feedback'],
-    );
-
-    DateTime createdAt = DateTime.now();
-    final createdRaw =
-        json['createdAt'] ?? json['created_at'] ?? json['date'] ?? json['time'];
-    if (createdRaw is String && createdRaw.isNotEmpty) {
-      createdAt = DateTime.tryParse(createdRaw) ?? createdAt;
-    } else if (createdRaw is int) {
-      createdAt = DateTime.fromMillisecondsSinceEpoch(createdRaw);
-    }
-
-    String? reviewerName = _nullableStr(json['reviewerName'] ??
-        json['reviewer_name'] ??
-        json['clientName'] ??
-        json['authorName']);
-    if (reviewerName == null || reviewerName.isEmpty) {
-      final rev = json['reviewer'] ?? json['user'] ?? json['client'];
-      if (rev is Map) {
-        reviewerName = _nullableStr(
-          rev['fullName'] ?? rev['name'] ?? rev['email'],
-        );
-      }
-    }
-
-    return Review(
-      id: id,
-      jobId: jobId,
-      rating: rating,
-      comment: comment,
-      createdAt: createdAt,
-      reviewerName: reviewerName,
-    );
-  } catch (_) {
-    return null;
-  }
-}
+String _str(dynamic v) => v == null ? '' : v.toString().trim();
 
 String? _nullableStr(dynamic v) {
   final s = _str(v);
   return s.isEmpty ? null : s;
 }
 
-List<Review> reviewsFromLabourApiResponse(dynamic data) {
-  final raw = <dynamic>[];
-  if (data is List) {
-    raw.addAll(data);
-  } else if (data is Map<String, dynamic>) {
-    final list = data['reviews'] ??
-        data['data'] ??
-        data['items'] ??
-        data['results'];
-    if (list is List) raw.addAll(list);
-  }
+DateTime? _parseDate(dynamic raw) {
+  if (raw is String && raw.isNotEmpty) return DateTime.tryParse(raw);
+  if (raw is int) return DateTime.fromMillisecondsSinceEpoch(raw);
+  return null;
+}
 
-  final out = <Review>[];
-  for (final e in raw) {
-    if (e is! Map) continue;
-    final m = Map<String, dynamic>.from(e);
-    try {
-      out.add(Review.fromJson(m));
-    } catch (_) {
-      final r = reviewFromLabourApiJson(m);
-      if (r != null) out.add(r);
-    }
-  }
-  return out;
+Review reviewFromLabourApiJson(Map<String, dynamic> json) {
+  final ratingRaw = json['rating'];
+  final rating = ratingRaw is num
+      ? ratingRaw.toDouble()
+      : double.tryParse(_str(ratingRaw)) ?? 0.0;
+  return Review(
+    id: _str(json['id']),
+    jobId: _str(json['jobId']),
+    rating: rating,
+    comment: _nullableStr(json['comment']),
+    createdAt: _parseDate(json['createdAt']) ?? DateTime.now(),
+    reviewerId: _nullableStr(json['reviewerId']),
+    revieweeId: _nullableStr(json['revieweeId']),
+    serviceRequestId: _nullableStr(json['serviceRequestId']),
+    updatedAt: _parseDate(json['updatedAt']),
+  );
+}
+
+List<Review> reviewsFromLabourApiList(dynamic data) {
+  if (data is! List) return const <Review>[];
+  return data
+      .whereType<Map>()
+      .map((e) => reviewFromLabourApiJson(Map<String, dynamic>.from(e)))
+      .toList();
+}
+
+ReviewUserSummary reviewUserSummaryFromJson(Map<String, dynamic> json) {
+  final ratingsRaw = json['ratings'];
+  final ratings = ratingsRaw is num
+      ? ratingsRaw.toDouble()
+      : double.tryParse(_str(ratingsRaw)) ?? 0.0;
+  final countRaw = json['reviewCount'];
+  final count = countRaw is num
+      ? countRaw.toInt()
+      : int.tryParse(_str(countRaw)) ?? 0;
+  return ReviewUserSummary(
+    id: _str(json['id']),
+    fullName: _str(json['fullName']),
+    profilePic: _nullableStr(json['profilePic']),
+    ratings: ratings,
+    reviewCount: count,
+  );
+}
+
+ReviewsSummary reviewsSummaryFromJson(Map<String, dynamic> json) {
+  final userJson = json['user'];
+  final user = userJson is Map<String, dynamic>
+      ? reviewUserSummaryFromJson(userJson)
+      : const ReviewUserSummary(id: '', fullName: '');
+  final reviews = reviewsFromLabourApiList(json['reviews']);
+  return ReviewsSummary(user: user, reviews: reviews);
 }

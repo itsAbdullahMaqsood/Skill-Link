@@ -138,6 +138,7 @@ class NegotiationOffer {
     required this.actorRole,
     required this.actorUserId,
     required this.amount,
+    required this.visitingFee,
     required this.currency,
     required this.createdAt,
   });
@@ -146,19 +147,27 @@ class NegotiationOffer {
   final NegotiationActor actorRole;
   final String actorUserId;
   final num amount;
+  final num visitingFee;
   final String currency;
   final DateTime? createdAt;
+
+  num get total => amount + visitingFee;
 
   factory NegotiationOffer.fromJson(Map<String, dynamic> json) {
     final amountRaw = json['amount'];
     final num amount = amountRaw is num
         ? amountRaw
         : num.tryParse(amountRaw?.toString() ?? '') ?? 0;
+    final visitRaw = json['visitingFee'];
+    final num visitingFee = visitRaw is num
+        ? visitRaw
+        : num.tryParse(visitRaw?.toString() ?? '') ?? 0;
     return NegotiationOffer(
       sequence: (json['sequence'] as num?)?.toInt() ?? 0,
       actorRole: NegotiationActor.fromRaw(json['actorRole'] as String?),
       actorUserId: (json['actorUserId'] ?? '').toString(),
       amount: amount,
+      visitingFee: visitingFee,
       currency: (json['currency'] ?? 'PKR').toString(),
       createdAt: ServiceRequest._parseDate(json['createdAt']),
     );
@@ -241,21 +250,30 @@ class ServiceRequestParty {
 class AcceptedBid {
   const AcceptedBid({
     required this.amount,
+    required this.visitingFee,
     required this.currency,
     required this.acceptedAt,
   });
 
   final num amount;
+  final num visitingFee;
   final String currency;
   final DateTime? acceptedAt;
+
+  num get total => amount + visitingFee;
 
   factory AcceptedBid.fromJson(Map<String, dynamic> json) {
     final amountRaw = json['amount'];
     final num amount = amountRaw is num
         ? amountRaw
         : num.tryParse(amountRaw?.toString() ?? '') ?? 0;
+    final visitRaw = json['visitingFee'];
+    final num visitingFee = visitRaw is num
+        ? visitRaw
+        : num.tryParse(visitRaw?.toString() ?? '') ?? 0;
     return AcceptedBid(
       amount: amount,
+      visitingFee: visitingFee,
       currency: (json['currency'] ?? 'PKR').toString(),
       acceptedAt: ServiceRequest._parseDate(json['acceptedAt']),
     );

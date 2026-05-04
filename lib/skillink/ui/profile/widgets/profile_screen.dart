@@ -254,6 +254,13 @@ class ProfileScreen extends ConsumerWidget {
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => context.push(Routes.notifications),
                   ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.star_outline_rounded),
+                    title: const Text('Received reviews'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push(Routes.myReviews),
+                  ),
                 ],
               ),
             ),

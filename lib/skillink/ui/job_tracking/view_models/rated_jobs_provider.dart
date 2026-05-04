@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skilllink/skillink/data/providers.dart';
+import 'package:skilllink/skillink/data/repositories/review_repository.dart';
 import 'package:skilllink/skillink/domain/models/job.dart';
 import 'package:skilllink/skillink/domain/models/job_status.dart';
 import 'package:skilllink/skillink/ui/auth/view_models/auth_view_model.dart';
@@ -21,6 +22,17 @@ final ratedJobsTrackerProvider =
   (_) => RatedJobsTracker(),
 );
 
+final reviewedJobIdsProvider = FutureProvider<Set<String>>((ref) async {
+  final user = ref.watch(authViewModelProvider).user;
+  if (user == null) return const <String>{};
+  final repo = ref.watch(reviewRepositoryProvider);
+  final res = await repo.getMyReviews(type: MyReviewsType.given);
+  return res.when(
+    success: (list) => {for (final r in list) r.jobId},
+    failure: (_, __) => const <String>{},
+  );
+});
+
 final unratedCompletedJobsProvider = FutureProvider<List<Job>>((ref) async {
   final user = ref.watch(authViewModelProvider).user;
   if (user == null || user.role.name != 'homeowner') return const <Job>[];
@@ -30,6 +42,7 @@ final unratedCompletedJobsProvider = FutureProvider<List<Job>>((ref) async {
   final pendingIds = {for (final p in pendingAsync.value!) p.jobId};
 
   final rated = ref.watch(ratedJobsTrackerProvider);
+  final reviewedIds = await ref.watch(reviewedJobIdsProvider.future);
 
   final jobsResult = await ref.read(jobRepositoryProvider).listJobs();
   final jobs = jobsResult.valueOrNull ?? const <Job>[];
@@ -41,6 +54,7 @@ final unratedCompletedJobsProvider = FutureProvider<List<Job>>((ref) async {
             j.status == JobStatus.completed &&
             j.paid &&
             !rated.contains(j.jobId) &&
+            !reviewedIds.contains(j.jobId) &&
             !pendingIds.contains(j.jobId),
       )
       .toList()

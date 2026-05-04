@@ -28,6 +28,8 @@ class RemoteOpenJobPostRepository implements OpenJobPostRepository {
         'timeSlotEnd': input.timeSlotEnd,
         'serviceAddress': input.serviceAddress,
         'paymentMethod': input.paymentMethod.wire,
+        'expectedAmount': input.expectedAmount.toString(),
+        'expectedCurrency': input.expectedCurrency,
       });
 
       for (final path in input.localPhotoPaths) {
@@ -60,6 +62,10 @@ class RemoteOpenJobPostRepository implements OpenJobPostRepository {
     }
   }
 
+  /// `GET /open-job-posts/my`: for [ServiceRequestRole.worker], the API should
+  /// return only posts this worker has bid on. Bid JSON should expose that
+  /// worker’s id under a key parsed as [OpenJobPostBid.workerId] and it must
+  /// match the authenticated [AppUser.id] (SkillChain user id).
   @override
   Future<Result<List<OpenJobPost>>> listMyOpenJobPosts({
     required ServiceRequestRole role,
@@ -126,12 +132,14 @@ class RemoteOpenJobPostRepository implements OpenJobPostRepository {
   Future<Result<OpenJobPostBid>> submitOpenJobPostBid({
     required String id,
     required num amount,
-    required String currency,
+    required num visitingFee,
+    String currency = 'PKR',
     String? note,
   }) async {
     try {
       final body = <String, dynamic>{
         'amount': amount,
+        'visitingFee': visitingFee,
         'currency': currency,
         if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
       };
@@ -144,6 +152,27 @@ class RemoteOpenJobPostRepository implements OpenJobPostRepository {
         return const Failure('Empty response from server.');
       }
       return Success(OpenJobPostBid.fromJson(data));
+    } on Exception catch (e) {
+      return Failure(ErrorMapper.fromException(e), e);
+    }
+  }
+
+  @override
+  Future<Result<OpenJobPost>> updateExpectedAmount({
+    required String postId,
+    required num amount,
+    String currency = 'PKR',
+  }) async {
+    try {
+      final res = await _api.patch<Map<String, dynamic>>(
+        '/open-job-posts/$postId/expected-amount',
+        data: <String, dynamic>{'amount': amount, 'currency': currency},
+      );
+      final data = res.data;
+      if (data == null) {
+        return const Failure('Empty response from server.');
+      }
+      return Success(OpenJobPost.fromJson(data));
     } on Exception catch (e) {
       return Failure(ErrorMapper.fromException(e), e);
     }

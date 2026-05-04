@@ -24,12 +24,16 @@ class SignupApiService {
   static ApiException _fromDio(DioException e) {
     final statusCode = e.response?.statusCode;
     final data = e.response?.data;
-    String message = 'Something went wrong';
-    if (data is Map<String, dynamic>) {
-      message = (data['message'] as String?) ?? message;
-      if (message.isEmpty || message == 'Something went wrong') {
-        final err = data['error'] as String?;
-        if (err != null && err.isNotEmpty) message = err;
+    var message = parseApiErrorMessage(data) ?? 'Something went wrong';
+    if (message.trim().toLowerCase() == 'error' && data is Map) {
+      final errorValue = data['error'];
+      if (errorValue is String && errorValue.trim().isNotEmpty) {
+        message = errorValue.trim();
+      } else if (errorValue is Map && errorValue['message'] != null) {
+        final nestedMessage = errorValue['message'].toString().trim();
+        if (nestedMessage.isNotEmpty) {
+          message = nestedMessage;
+        }
       }
     }
     return ApiException(

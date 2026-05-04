@@ -15,9 +15,6 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$Bid {
 
-/// Populated by the backend after the bid is persisted — the homeowner
-/// then references this id when calling the accept endpoint. Null for
-/// in-flight bids the client just built locally.
  String? get bidId; String get bidderId; double get amount; DateTime get submittedAt; bool get accepted;
 /// Create a copy of Bid
 /// with the given fields replaced by the non-null parameter values.
@@ -219,9 +216,6 @@ class _Bid implements Bid {
   const _Bid({this.bidId, required this.bidderId, required this.amount, required this.submittedAt, this.accepted = false});
   factory _Bid.fromJson(Map<String, dynamic> json) => _$BidFromJson(json);
 
-/// Populated by the backend after the bid is persisted — the homeowner
-/// then references this id when calling the accept endpoint. Null for
-/// in-flight bids the client just built locally.
 @override final  String? bidId;
 @override final  String bidderId;
 @override final  double amount;

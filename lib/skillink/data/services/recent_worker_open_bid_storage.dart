@@ -10,6 +10,7 @@ class LocalRecentOpenJobBid {
     required this.postId,
     required this.descriptionPreview,
     required this.amount,
+    required this.visitingFee,
     required this.currency,
     required this.status,
     required this.recordedAt,
@@ -18,24 +19,31 @@ class LocalRecentOpenJobBid {
   final String postId;
   final String descriptionPreview;
   final num amount;
+  final num visitingFee;
   final String currency;
   final OpenJobPostBidStatus status;
   final DateTime recordedAt;
+
+  num get total => amount + visitingFee;
 
   Map<String, dynamic> toJson() => {
         'postId': postId,
         'descriptionPreview': descriptionPreview,
         'amount': amount,
+        'visitingFee': visitingFee,
         'currency': currency,
         'status': _statusToRaw(status),
         'recordedAt': recordedAt.toIso8601String(),
       };
 
   factory LocalRecentOpenJobBid.fromJson(Map<String, dynamic> j) {
+    num parseNum(dynamic v) =>
+        v is num ? v : num.tryParse('$v') ?? 0;
     return LocalRecentOpenJobBid(
       postId: (j['postId'] ?? '').toString(),
       descriptionPreview: (j['descriptionPreview'] ?? '').toString(),
-      amount: j['amount'] is num ? j['amount'] as num : num.tryParse('${j['amount']}') ?? 0,
+      amount: parseNum(j['amount']),
+      visitingFee: parseNum(j['visitingFee']),
       currency: (j['currency'] ?? 'PKR').toString(),
       status: OpenJobPostBidStatus.fromRaw(j['status'] as String?),
       recordedAt: DateTime.tryParse((j['recordedAt'] ?? '').toString()) ??
@@ -87,6 +95,7 @@ abstract final class RecentWorkerOpenBidStorage {
     required String postId,
     required String description,
     required num amount,
+    required num visitingFee,
     required String currency,
     required OpenJobPostBidStatus status,
   }) async {
@@ -97,6 +106,7 @@ abstract final class RecentWorkerOpenBidStorage {
       postId: postId,
       descriptionPreview: _truncate(description, 140),
       amount: amount,
+      visitingFee: visitingFee,
       currency: currency,
       status: status,
       recordedAt: DateTime.now().toUtc(),

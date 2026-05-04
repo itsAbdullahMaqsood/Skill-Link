@@ -1,9 +1,16 @@
 import 'package:dio/dio.dart';
+import 'package:skilllink/skillink/data/mappers/worker_from_labour_api.dart';
 import 'package:skilllink/skillink/data/repositories/ai_repository.dart';
 import 'package:skilllink/skillink/data/services/api_service.dart';
 import 'package:skilllink/skillink/domain/models/ai_message.dart';
 import 'package:skilllink/skillink/domain/models/worker.dart';
 import 'package:skilllink/skillink/utils/result.dart';
+
+class _ScoredWorker {
+  const _ScoredWorker(this.worker, this.score);
+  final Worker worker;
+  final double score;
+}
 
 class RemoteAiRepository implements AiRepository {
   RemoteAiRepository({required ApiService apiService}) : _api = apiService;
@@ -44,31 +51,32 @@ class RemoteAiRepository implements AiRepository {
     );
   }
 
-  static Worker? _parseSuggestedWorker(Map<String, dynamic> m) {
+  /// Maps an item from `/chatbot/chat`'s `suggestedWorkers[]` to a [Worker].
+  ///
+  /// The chatbot returns workers with already-resolved `serviceNames`
+  /// (display labels like "Plumbing"), so we feed them into [Worker.skillTypes]
+  /// alongside the standard labour-API fields handled by
+  /// [workerFromLabourApiJson]. Returns `null` for malformed entries.
+  static Worker? _parseSuggestedWorker(Map<String, dynamic> raw) {
     final id =
-        m['_id']?.toString() ?? m['id']?.toString() ?? m['userId']?.toString();
+        raw['_id']?.toString() ?? raw['id']?.toString() ?? raw['userId']?.toString();
     if (id == null || id.trim().isEmpty) return null;
-    final name = m['fullName']?.toString() ??
-        m['name']?.toString() ??
-        'Technician';
-    final skills = m['skillTypes'] ?? m['skills'];
-    final skillTypes = skills is List
-        ? skills.map((e) => e.toString()).toList()
-        : const <String>[];
-    return Worker(
-      id: id.trim(),
-      name: name.trim(),
-      email: m['email']?.toString() ?? '',
-      phone: m['phone']?.toString() ?? '',
-      skillTypes: skillTypes,
-      rating: (m['rating'] as num?)?.toDouble() ?? 0,
-      reviewCount: (m['reviewCount'] as num?)?.toInt() ?? 0,
-      verificationStatus: m['verificationStatus'] as bool? ?? false,
-      avatarUrl: m['profilePic']?.toString() ?? m['avatarUrl']?.toString(),
-      hourlyRate: (m['hourlyRate'] as num?)?.toDouble(),
-      distanceKm: (m['distanceKm'] as num?)?.toDouble(),
-      bio: m['bio']?.toString(),
-    );
+
+    final normalized = Map<String, dynamic>.from(raw);
+    final serviceNames = raw['serviceNames'];
+    if (serviceNames is List &&
+        serviceNames.isNotEmpty &&
+        normalized['services'] == null &&
+        normalized['skillTypes'] == null) {
+      normalized['services'] =
+          serviceNames.map((e) => e.toString()).toList();
+    }
+
+    try {
+      return workerFromLabourApiJson(normalized);
+    } catch (_) {
+      return null;
+    }
   }
 
   @override
@@ -138,15 +146,20 @@ class RemoteAiRepository implements AiRepository {
         return const Failure<AiChatAssistantReply>('Incomplete chat response');
       }
 
-      Worker? recommended;
+      final recommendedWorkers = <Worker>[];
       final suggested = data['suggestedWorkers'];
       if (suggested is List) {
+        final scored = <_ScoredWorker>[];
         for (final item in suggested) {
           final m = _asJsonMap(item);
           if (m == null) continue;
-          recommended = _parseSuggestedWorker(m);
-          if (recommended != null) break;
+          final worker = _parseSuggestedWorker(m);
+          if (worker == null) continue;
+          final score = (m['matchScore'] as num?)?.toDouble() ?? 0;
+          scored.add(_ScoredWorker(worker, score));
         }
+        scored.sort((a, b) => b.score.compareTo(a.score));
+        recommendedWorkers.addAll(scored.map((s) => s.worker));
       }
 
       final now = DateTime.now();
@@ -155,7 +168,9 @@ class RemoteAiRepository implements AiRepository {
         role: AiMessageRole.ai,
         content: reply,
         createdAt: now,
-        recommendedWorker: recommended,
+        recommendedWorker:
+            recommendedWorkers.isEmpty ? null : recommendedWorkers.first,
+        recommendedWorkers: recommendedWorkers,
       );
 
       return Success(

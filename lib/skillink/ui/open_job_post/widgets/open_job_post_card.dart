@@ -3,6 +3,7 @@ import 'package:skilllink/skillink/domain/models/open_job_post.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_colors.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_typography.dart';
 import 'package:skilllink/skillink/ui/core/ui/primary_button.dart';
+import 'package:skilllink/skillink/utils/currency_format.dart';
 
 class OpenJobPostCard extends StatelessWidget {
   const OpenJobPostCard({
@@ -74,7 +75,32 @@ class OpenJobPostCard extends StatelessWidget {
                               .copyWith(color: AppColors.textMuted),
                         ),
                         const SizedBox(height: 6),
-                        _StatusPill(status: post.status),
+                        Row(
+                          children: [
+                            _StatusPill(status: post.status),
+                            if (post.expectedAmount != null &&
+                                post.expectedAmount! > 0) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: AppColors.accent
+                                      .withValues(alpha: 0.14),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  formatPkr(post.expectedAmount),
+                                  style: AppTypography.labelMedium.copyWith(
+                                    color: AppColors.accent,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ],
                     ),
                   ),

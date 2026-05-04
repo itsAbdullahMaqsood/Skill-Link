@@ -1,6 +1,5 @@
 import 'package:skilllink/skillink/domain/models/job.dart';
 import 'package:skilllink/skillink/domain/models/job_status.dart';
-import 'package:skilllink/skillink/domain/models/review.dart';
 import 'package:skilllink/skillink/domain/models/structured_address.dart';
 import 'package:skilllink/skillink/utils/result.dart';
 
@@ -74,10 +73,4 @@ abstract class JobRepository {
   });
 
   Future<Result<Job>> markAsPaid({required String jobId});
-
-  Future<Result<Review>> submitReview({
-    required String jobId,
-    required double rating,
-    String? comment,
-  });
 }

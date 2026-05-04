@@ -6,7 +6,7 @@ import 'package:skilllink/skillink/domain/models/structured_address.dart';
 
 /// Minimal [Job] used only by the completion-amount prompt UI for service requests.
 Job jobForCompletionPrompt(ServiceRequest sr) {
-  final price = sr.acceptedBid?.amount.toDouble();
+  final price = sr.acceptedBid?.total.toDouble();
   final worker = sr.assignedWorker;
   final trade = (worker != null && worker.services.isNotEmpty)
       ? worker.services.first.name

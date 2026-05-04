@@ -3,14 +3,18 @@ import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:skilllink/skillink/data/providers.dart';
 import 'package:skilllink/skillink/domain/models/user_role.dart';
+import 'package:skilllink/skillink/routing/routes.dart';
 import 'package:skilllink/skillink/ui/auth/view_models/auth_view_model.dart';
 import 'package:skilllink/skillink/ui/chat/view_models/chat_thread_view_model.dart';
 import 'package:skilllink/skillink/ui/chat/widgets/chat_input_bar.dart';
 import 'package:skilllink/skillink/ui/chat/widgets/chat_message_bubble.dart';
+import 'package:skilllink/skillink/ui/chat/widgets/peer_profile_screen.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_colors.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_typography.dart';
+import 'package:skilllink/skillink/utils/avatar_url_image.dart';
 
 class ChatThreadScreen extends ConsumerStatefulWidget {
   const ChatThreadScreen({super.key, required this.chatId});
@@ -148,59 +152,93 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Size get preferredSize => const Size.fromHeight(64);
 
+  void _openPeerProfile(BuildContext context) {
+    final peer = state.peer;
+    if (peer == null) return;
+    final peerId = peer.peerId.trim();
+    if (peerId.isEmpty) return;
+
+    if (peer.peerRole == UserRole.worker) {
+      // Hide both Message and Book Now to avoid looping the user back into
+      // the same chat or kicking off an unrelated booking flow from chat.
+      context.push(
+        Routes.workerProfile(peerId, hideBook: true, hideMessage: true),
+      );
+      return;
+    }
+
+    context.push(
+      Routes.peerProfile(peerId),
+      extra: PeerProfileArgs(
+        peerId: peerId,
+        peerName: peer.peerName,
+        peerAvatar: peer.peerAvatar,
+        peerRole: peer.peerRole,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final peer = state.peer;
     final name = peer?.peerName ?? 'Chat';
     final avatar = peer?.peerAvatar;
     final role = peer?.peerRole;
+    final canOpen = peer != null && peer.peerId.trim().isNotEmpty;
 
     return AppBar(
       backgroundColor: AppColors.surface,
       elevation: 0,
       titleSpacing: 0,
-      title: Row(
-        children: [
-          _HeaderAvatar(name: name, url: avatar),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+      title: InkWell(
+        onTap: canOpen ? () => _openPeerProfile(context) : null,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          child: Row(
+            children: [
+              _HeaderAvatar(name: name, url: avatar),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Flexible(
-                      child: Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.titleLarge.copyWith(
-                          fontWeight: FontWeight.w700,
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.titleLarge.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                         ),
+                        if (role == UserRole.worker) ...[
+                          const SizedBox(width: 6),
+                          const Icon(Icons.verified,
+                              size: 14, color: AppColors.primary),
+                        ],
+                      ],
+                    ),
+                    Text(
+                      role == UserRole.worker
+                          ? 'Worker'
+                          : role == UserRole.homeowner
+                              ? 'Homeowner'
+                              : '',
+                      style: AppTypography.labelMedium.copyWith(
+                        color: AppColors.textMuted,
                       ),
                     ),
-                    if (role == UserRole.worker) ...[
-                      const SizedBox(width: 6),
-                      const Icon(Icons.verified,
-                          size: 14, color: AppColors.primary),
-                    ],
                   ],
                 ),
-                Text(
-                  role == UserRole.worker
-                      ? 'Worker'
-                      : role == UserRole.homeowner
-                          ? 'Homeowner'
-                          : '',
-                  style: AppTypography.labelMedium.copyWith(
-                    color: AppColors.textMuted,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -227,10 +265,11 @@ class _HeaderAvatar extends StatelessWidget {
         ),
       ),
     );
-    if (url == null || url!.isEmpty || !url!.startsWith('http')) return fallback;
+    final resolved = resolveActiveBackendMediaUrl(url);
+    if (resolved == null) return fallback;
     return ClipOval(
       child: CachedNetworkImage(
-        imageUrl: url!,
+        imageUrl: resolved,
         width: 36,
         height: 36,
         fit: BoxFit.cover,

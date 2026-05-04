@@ -4,7 +4,6 @@ import 'package:dio/dio.dart';
 import 'package:skilllink/models/user.dart' as sc;
 import 'package:skilllink/services/auth_service.dart';
 import 'package:skilllink/services/signup_api_service.dart';
-import 'package:skilllink/skillink/data/mappers/review_from_labour_api.dart';
 import 'package:skilllink/skillink/data/mappers/worker_from_labour_api.dart';
 import 'package:skilllink/skillink/data/mappers/worker_from_skillchain_user.dart';
 import 'package:skilllink/skillink/data/model/worker_dto.dart';
@@ -16,9 +15,7 @@ import 'package:skilllink/skillink/data/services/api_service.dart';
 import 'package:skilllink/skillink/domain/models/job_status.dart';
 import 'package:skilllink/skillink/domain/models/service_request.dart';
 import 'package:skilllink/skillink/domain/models/job.dart';
-import 'package:skilllink/skillink/domain/models/review.dart';
 import 'package:skilllink/skillink/domain/models/worker.dart';
-import 'package:skilllink/skillink/testing/models/sample_reviews.dart';
 import 'package:skilllink/skillink/utils/error_mapper.dart';
 import 'package:skilllink/skillink/utils/result.dart';
 
@@ -56,6 +53,33 @@ class RemoteWorkerRepository implements WorkerRepository {
   final AuthService? _auth;
   final JobRepository _jobs;
   final ServiceRequestRepository _serviceRequests;
+
+  Future<void> _mergeLabourSelfFromWorkerPayload({
+    required String requestedId,
+    required Map<String, dynamic> payload,
+    required Worker worker,
+  }) async {
+    final auth = _auth;
+    if (auth == null) return;
+    final rid = requestedId.trim();
+    if (rid.isEmpty || worker.id != rid) return;
+    try {
+      if (!await auth.isLabourBackend()) return;
+      final u = await auth.getCurrentUser();
+      if (u == null || u.id != worker.id) return;
+      final userNested = payload['user'];
+      if (userNested is Map<String, dynamic>) {
+        await auth.saveUserData(Map<String, dynamic>.from(userNested));
+      } else {
+        await auth.saveUserData(Map<String, dynamic>.from(payload));
+      }
+      // Do NOT call bumpAuthChange() — getWorker is called during
+      // reloadSession/refreshCurrentUserFromApi and bumping the epoch
+      // triggers _AuthRefresh → reloadSession → getWorker again (infinite loop).
+    } on Object {
+      // Best-effort sync; profile still loads from API worker payload.
+    }
+  }
 
   @override
   Future<Result<List<Worker>>> searchWorkers(
@@ -148,18 +172,6 @@ class RemoteWorkerRepository implements WorkerRepository {
 
   @override
   Future<Result<Worker>> getWorker(String id) async {
-    final auth = _auth;
-    if (auth != null && id.trim().isNotEmpty) {
-      try {
-        if (await auth.isLabourBackend()) {
-          final u = await auth.getCurrentUser();
-          if (u != null && u.id == id) {
-            return Success(WorkerFromSkillChainUser.map(u));
-          }
-        }
-      } catch (_) {
-      }
-    }
     try {
       final res = await _api.get<Map<String, dynamic>>('/workers/$id');
       final data = res.data;
@@ -174,77 +186,28 @@ class RemoteWorkerRepository implements WorkerRepository {
       try {
         final w = workerFromLabourApiJson(payload);
         if (w.id.isNotEmpty) {
+          await _mergeLabourSelfFromWorkerPayload(
+            requestedId: id,
+            payload: payload,
+            worker: w,
+          );
           return Success(w);
         }
       } on Object {
       }
-      return Success(WorkerDto.fromJson(payload).toDomain());
-    } on DioException catch (e) {
-      return Failure(ErrorMapper.fromException(e), e);
-    } on Exception catch (e) {
-      return Failure(ErrorMapper.fromException(e), e);
-    }
-  }
-
-  @override
-  Future<Result<List<Review>>> getReviews(
-    String workerId, {
-    int page = 1,
-  }) async {
-    final auth = _auth;
-    if (auth != null && workerId.trim().isNotEmpty) {
-      try {
-        if (await auth.isLabourBackend()) {
-          final u = await auth.getCurrentUser();
-          if (u != null && u.id == workerId) {
-            return Success(SampleReviews.forWorker(workerId));
-          }
-        }
-      } catch (_) {
-      }
-    }
-    List<Review> parseReviewList(List<dynamic> list) {
-      final out = <Review>[];
-      for (final e in list) {
-        if (e is! Map) continue;
-        final m = Map<String, dynamic>.from(e);
-        try {
-          out.add(Review.fromJson(m));
-        } catch (_) {
-          final loose = reviewFromLabourApiJson(m);
-          if (loose != null) out.add(loose);
-        }
-      }
-      return out;
-    }
-
-    try {
-      final res = await _api.get<dynamic>(
-        '/workers/$workerId/reviews',
-        queryParameters: {'page': page},
+      final fallback = WorkerDto.fromJson(payload).toDomain();
+      await _mergeLabourSelfFromWorkerPayload(
+        requestedId: id,
+        payload: payload,
+        worker: fallback,
       );
-      final data = res.data;
-      if (data is List) {
-        return Success(parseReviewList(data));
-      }
-      if (data is Map<String, dynamic>) {
-        final inner = data['reviews'] ?? data['data'] ?? data['items'];
-        if (inner is List) {
-          return Success(parseReviewList(inner));
-        }
-        return Success(reviewsFromLabourApiResponse(data));
-      }
-      return const Success([]);
+      return Success(fallback);
     } on DioException catch (e) {
-      if (e.response?.statusCode == 404) {
-        return const Success([]);
-      }
       return Failure(ErrorMapper.fromException(e), e);
     } on Exception catch (e) {
       return Failure(ErrorMapper.fromException(e), e);
     }
   }
-
 
   @override
   Future<Result<Worker>> getMyProfile() async {
@@ -259,7 +222,12 @@ class RemoteWorkerRepository implements WorkerRepository {
                 'This account is registered as a homeowner, not a worker.',
               );
             }
-            return Success(WorkerFromSkillChainUser.map(u));
+            final remote = await getWorker(u.id);
+            return remote.when(
+              success: Success.new,
+              failure: (String message, Exception? exception) =>
+                  Success(WorkerFromSkillChainUser.map(u)),
+            );
           }
         }
       } catch (_) {

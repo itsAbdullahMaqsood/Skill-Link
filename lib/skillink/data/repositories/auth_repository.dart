@@ -48,10 +48,23 @@ class UserProfileUpdate {
     this.phone,
     this.address,
     this.avatarUrl,
+    this.bio,
+    this.age,
+    this.gender,
+    this.pastExperience,
+    this.location,
+    this.profilePic,
   });
 
   final String? name;
   final String? phone;
   final StructuredAddress? address;
   final String? avatarUrl;
+  final String? bio;
+  final int? age;
+  final String? gender;
+  final String? pastExperience;
+  /// Free-text location for labour `POST /users/profile`.
+  final String? location;
+  final File? profilePic;
 }

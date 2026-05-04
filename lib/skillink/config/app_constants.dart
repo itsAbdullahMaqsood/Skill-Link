@@ -7,8 +7,17 @@ class AppConstants {
   static String get apiBaseUrl =>
       _env('API_BASE_URL', fallback: ApiService.skillinkBaseUrl);
 
-  static String get firebaseRtdbUrl =>
-      _env('FIREBASE_RTDB_URL', fallback: 'https://REPLACE_ME.firebaseio.com');
+  static String get firebaseRtdbUrl {
+    final raw = _env(
+      'FIREBASE_RTDB_URL',
+      fallback: 'https://iot-project-283d4-default-rtdb.firebaseio.com',
+    ).trim();
+    // Canonical form (no trailing slash) — must match the URL registered
+    // in `firebase_options.dart`'s `DefaultFirebaseOptions.android.databaseURL`
+    // so `FirebaseDatabase.instanceFor` reuses the same instance instead of
+    // creating an unauthenticated second one.
+    return raw.endsWith('/') ? raw.substring(0, raw.length - 1) : raw;
+  }
 
   /// ESP32 posts latest readings here (sibling to `readings` push events).
   static const String firebaseEsp32SensorDataPath = 'sensorData';
@@ -22,8 +31,7 @@ class AppConstants {
   static const String anomaliesPath = 'users';
 
   static const String jobStatusPath = 'jobs';
-  static const String workerLocationPath =
-      'jobs';
+  static const String workerLocationPath = 'jobs';
 
   static const String postedJobsRoot = 'posted_jobs';
   static const String postedJobsByTagRoot = 'posted_jobs_by_tag';
@@ -39,10 +47,8 @@ class AppConstants {
 
   static const int postedJobMediaSoftTotalBytes = 200 * 1024 * 1024;
 
-  static const String postedJobsNotificationChannelId =
-      'skillink_posted_jobs';
-  static const String postedJobsNotificationChannelName =
-      'Posted jobs & bids';
+  static const String postedJobsNotificationChannelId = 'skillink_posted_jobs';
+  static const String postedJobsNotificationChannelName = 'Posted jobs & bids';
   static const String postedJobsNotificationChannelDescription =
       'Alerts when jobs are posted or bids change.';
 
@@ -83,8 +89,7 @@ class AppConstants {
 
   static const Duration maxVideoDuration = Duration(minutes: 2);
   static const int maxVideoSizeBytes = 50 * 1024 * 1024;
-  static const int maxVoiceNoteSizeBytes =
-      20 * 1024 * 1024;
+  static const int maxVoiceNoteSizeBytes = 20 * 1024 * 1024;
 
   static const int chatMessagePageSize = 50;
 
@@ -102,8 +107,7 @@ class AppConstants {
 
   static const String cnicFormatRegex = r'^\d{5}-\d{7}-\d$';
 
-  static const bool showSimulateAnomalyButton =
-      true;
+  static const bool showSimulateAnomalyButton = true;
   static const bool inAppPaymentsEnabled = false;
 
   static String get googleMapsApiKey => _env('GOOGLE_MAPS_API_KEY');

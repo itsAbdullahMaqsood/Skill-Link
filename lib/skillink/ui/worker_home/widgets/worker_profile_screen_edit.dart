@@ -1,17 +1,17 @@
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:skilllink/models/user.dart' as sc;
-import 'package:skilllink/router/app_router.dart' as app_router;
+import 'package:skilllink/services/google_geocoding_service.dart';
 import 'package:skilllink/skillink/config/app_constants.dart';
 import 'package:skilllink/skillink/data/providers.dart';
 import 'package:skilllink/skillink/data/repositories/worker_repository.dart';
-import 'package:skilllink/skillink/routing/routes.dart';
-import 'package:skilllink/skillink/domain/models/review.dart';
 import 'package:skilllink/skillink/domain/models/worker.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_colors.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_typography.dart';
@@ -20,8 +20,8 @@ import 'package:skilllink/skillink/ui/core/ui/empty_state.dart';
 import 'package:skilllink/skillink/ui/core/ui/loading_shimmer.dart';
 import 'package:skilllink/skillink/ui/core/ui/primary_button.dart';
 import 'package:skilllink/skillink/utils/avatar_url_image.dart';
-import 'package:skilllink/skillink/ui/auth/view_models/auth_view_model.dart';
 import 'package:skilllink/skillink/ui/worker_home/view_models/worker_profile_view_model.dart';
+import 'package:skilllink/skillink/ui/worker_home/widgets/worker_profile_shared.dart';
 
 class WorkerProfileEditScreen extends ConsumerStatefulWidget {
   const WorkerProfileEditScreen({super.key});
@@ -50,6 +50,9 @@ class _WorkerProfileEditScreenState
   File? _newCnicFront;
   File? _newCnicBack;
 
+  final _geocoding = GoogleGeocodingService();
+  bool _mapsLocationLoading = false;
+
   @override
   void dispose() {
     _nameCtrl.dispose();
@@ -68,7 +71,7 @@ class _WorkerProfileEditScreenState
     _phoneCtrl.text = w.phone;
     _bioCtrl.text = w.bio ?? '';
     _experienceCtrl.text = (labour?.pastExperience ?? '').trim();
-    _locationCtrl.text = (labour?.location ?? '').trim();
+    _locationCtrl.text = (labour?.location ?? w.location ?? '').trim();
     final age = labour?.age ?? 0;
     _ageCtrl.text = age > 0 ? age.toString() : '';
     final g = (labour?.gender ?? '').trim().toLowerCase();
@@ -93,20 +96,82 @@ class _WorkerProfileEditScreenState
     }
   }
 
+  Future<void> _useGoogleMapsLocation() async {
+    if (_mapsLocationLoading) return;
+
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Location services are disabled.')),
+      );
+      return;
+    }
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.deniedForever ||
+        permission == LocationPermission.denied) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Location permission is required for this.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _mapsLocationLoading = true);
+    try {
+      final position = await Geolocator.getCurrentPosition();
+      final addr = await _geocoding.reverseGeocode(
+        position.latitude,
+        position.longitude,
+      );
+      if (!mounted) return;
+      setState(() => _mapsLocationLoading = false);
+      if (addr != null && addr.trim().isNotEmpty) {
+        setState(() => _locationCtrl.text = addr.trim());
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not resolve address. Add GOOGLE_MAPS_API_KEY to .env '
+              'and enable the Geocoding API for that key.',
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _mapsLocationLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not get your location.')),
+      );
+    }
+  }
+
   Future<void> _pickAvatar() => _pickImage(
-        ImageSource.gallery,
-        (f) => setState(() => _newProfilePic = f),
-      );
+    ImageSource.gallery,
+    (f) => setState(() => _newProfilePic = f),
+  );
 
-  Future<void> _pickCnicFront() => _pickImage(
-        ImageSource.gallery,
-        (f) => setState(() => _newCnicFront = f),
-      );
+  Future<void> _pickCnicFront() =>
+      _pickImage(ImageSource.gallery, (f) => setState(() => _newCnicFront = f));
 
-  Future<void> _pickCnicBack() => _pickImage(
-        ImageSource.gallery,
-        (f) => setState(() => _newCnicBack = f),
-      );
+  Future<void> _pickCnicBack() =>
+      _pickImage(ImageSource.gallery, (f) => setState(() => _newCnicBack = f));
+
+  void _onGenderChanged(String? value) {
+    if (!mounted) return;
+    setState(() => _gender = value);
+  }
+
+  void _onServicesChanged(List<_ServiceOption> list) {
+    if (!mounted) return;
+    setState(() => _selectedServiceIds = list.map((e) => e.id).toList());
+  }
 
   void _onSave(WorkerProfileViewModel vm) {
     final form = _formKey.currentState;
@@ -120,8 +185,9 @@ class _WorkerProfileEditScreenState
       location: _locationCtrl.text.trim(),
       gender: _gender,
       age: int.tryParse(_ageCtrl.text.trim()),
-      selectedServiceIds:
-          _selectedServiceIds.where((e) => e.trim().isNotEmpty).toList(),
+      selectedServiceIds: _selectedServiceIds
+          .where((e) => e.trim().isNotEmpty)
+          .toList(),
       profilePic: _newProfilePic,
       cnicFront: _newCnicFront,
       cnicBack: _newCnicBack,
@@ -137,36 +203,41 @@ class _WorkerProfileEditScreenState
         ref.watch(labourServiceIdToNameProvider).valueOrNull ?? const {};
     final labour = ref.watch(currentLabourUserProvider).valueOrNull;
 
-    ref.listen(
-      workerProfileViewModelProvider.select((s) => s.errorMessage),
-      (_, msg) {
-        if (msg != null) {
-          ScaffoldMessenger.of(context)
-            ..hideCurrentSnackBar()
-            ..showSnackBar(SnackBar(content: Text(msg)));
-          vm.clearError();
-        }
-      },
-    );
+    ref.listen(workerProfileViewModelProvider.select((s) => s.errorMessage), (
+      _,
+      msg,
+    ) {
+      if (msg != null) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(msg)));
+        vm.clearError();
+      }
+    });
 
-    ref.listen(
-      workerProfileViewModelProvider.select((s) => s.saveSuccess),
-      (_, ok) {
-        if (ok) {
-          ScaffoldMessenger.of(context)
-            ..hideCurrentSnackBar()
-            ..showSnackBar(const SnackBar(
+    ref.listen(workerProfileViewModelProvider.select((s) => s.saveSuccess), (
+      _,
+      ok,
+    ) {
+      if (ok) {
+        if (!mounted) return;
+        vm.clearSaveSuccess();
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(
               content: Text('Profile updated'),
               backgroundColor: AppColors.success,
-            ));
-          setState(() {
-            _newProfilePic = null;
-            _newCnicFront = null;
-            _newCnicBack = null;
-          });
-        }
-      },
-    );
+            ),
+          );
+        setState(() {
+          _newProfilePic = null;
+          _newCnicFront = null;
+          _newCnicBack = null;
+        });
+        context.pop();
+      }
+    });
 
     if (state.worker != null) _seedControllers(state.worker!, labour);
 
@@ -176,7 +247,7 @@ class _WorkerProfileEditScreenState
         backgroundColor: AppColors.background,
         elevation: 0,
         scrolledUnderElevation: 0,
-        title: Text('My Profile', style: AppTypography.headlineMedium),
+        title: Text('Edit profile', style: AppTypography.headlineMedium),
       ),
       body: state.isLoading
           ? const Padding(
@@ -184,18 +255,15 @@ class _WorkerProfileEditScreenState
               child: LoadingShimmer(height: 300),
             )
           : state.worker == null
-              ? const EmptyState(
-                  icon: Icons.person_off_outlined,
-                  title: 'Profile unavailable',
-                  subtitle: 'Could not load your profile.',
-                )
-              : RefreshIndicator(
-                  onRefresh: () async {
-                    ref.invalidate(currentLabourUserProvider);
-                    await vm.refresh();
-                  },
-                  child: _body(state, vm, serviceMap, labour),
-                ),
+          ? const EmptyState(
+              icon: Icons.person_off_outlined,
+              title: 'Profile unavailable',
+              subtitle: 'Could not load your profile.',
+            )
+          : RefreshIndicator(
+              onRefresh: vm.refresh,
+              child: _body(state, vm, serviceMap, labour),
+            ),
     );
   }
 
@@ -206,21 +274,21 @@ class _WorkerProfileEditScreenState
     sc.UserModel? labour,
   ) {
     final w = state.worker!;
-    final serviceLabels = resolveWorkerServiceLabels(
-      w,
-      idToName: serviceIdToName,
-    );
-    final serviceCatalog = serviceIdToName.entries
-        .map((e) => _ServiceOption(id: e.key, name: e.value))
-        .toList()
-      ..sort((a, b) =>
-          a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    final serviceCatalog =
+        serviceIdToName.entries
+            .map((e) => _ServiceOption(id: e.key, name: e.value))
+            .toList()
+          ..sort(
+            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+          );
     for (final id in _selectedServiceIds) {
       if (!serviceCatalog.any((s) => s.id == id)) {
-        serviceCatalog.add(_ServiceOption(
-          id: id,
-          name: serviceIdToName[id] ?? _shortIdLabel(id),
-        ));
+        serviceCatalog.add(
+          _ServiceOption(
+            id: id,
+            name: serviceIdToName[id] ?? _shortIdLabel(id),
+          ),
+        );
       }
     }
     final selectedOptions = serviceCatalog
@@ -234,7 +302,7 @@ class _WorkerProfileEditScreenState
         children: [
           if (w.rating < AppConstants.lowRatingWarningThreshold &&
               w.reviewCount > 0)
-            _WarningBanner(rating: w.rating),
+            WorkerProfileWarningBanner(rating: w.rating),
 
           Center(
             child: _AvatarPicker(
@@ -248,8 +316,11 @@ class _WorkerProfileEditScreenState
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.star_rounded,
-                    size: 18, color: AppColors.accent),
+                const Icon(
+                  Icons.star_rounded,
+                  size: 18,
+                  color: AppColors.accent,
+                ),
                 const SizedBox(width: 4),
                 Text(
                   '${w.rating.toStringAsFixed(1)}  (${w.reviewCount} reviews)',
@@ -257,41 +328,29 @@ class _WorkerProfileEditScreenState
                 ),
                 if (w.verificationStatus) ...[
                   const SizedBox(width: 8),
-                  const Icon(Icons.verified_rounded,
-                      size: 16, color: AppColors.primary),
+                  const Icon(
+                    Icons.verified_rounded,
+                    size: 16,
+                    color: AppColors.primary,
+                  ),
                 ],
               ],
             ),
           ),
-          const SizedBox(height: 4),
-          Center(
-            child: Wrap(
-              spacing: 6,
-              alignment: WrapAlignment.center,
-              children: [
-                for (final label in serviceLabels)
-                  Chip(
-                    label: Text(
-                      label,
-                      style: AppTypography.labelMedium
-                          .copyWith(color: AppColors.primary),
-                    ),
-                    backgroundColor:
-                        AppColors.primary.withValues(alpha: 0.08),
-                    side: BorderSide.none,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    visualDensity: VisualDensity.compact,
-                  ),
-              ],
+          const SizedBox(height: 8),
+          WorkerAccountStatusRow(labour: labour),
+          const SizedBox(height: 16),
+          if (labour != null && labour.email.trim().isNotEmpty)
+            Card(
+              clipBehavior: Clip.antiAlias,
+              child: WorkerProfileInfoTile(
+                icon: Icons.email_outlined,
+                label: 'Email (read-only)',
+                value: labour.email.trim(),
+              ),
             ),
-          ),
-          const SizedBox(height: 20),
-
-          _WorkerStatusRow(labour: labour),
-          const SizedBox(height: 16),
-
-          _ReadOnlyInfoCard(worker: w, labour: labour),
-          const SizedBox(height: 16),
+          if (labour != null && labour.email.trim().isNotEmpty)
+            const SizedBox(height: 16),
 
           AppTextField(
             label: 'Full Name',
@@ -308,9 +367,22 @@ class _WorkerProfileEditScreenState
                 (v == null || v.trim().isEmpty) ? 'Required' : null,
           ),
           const SizedBox(height: 12),
-          AppTextField(
-            label: 'Location',
-            controller: _locationCtrl,
+          AppTextField(label: 'Location', controller: _locationCtrl),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _mapsLocationLoading ? null : _useGoogleMapsLocation,
+            icon: _mapsLocationLoading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.my_location_outlined, size: 20),
+            label: Text(
+              _mapsLocationLoading
+                  ? 'Fetching…'
+                  : 'Use current location (Google Maps)',
+            ),
           ),
           const SizedBox(height: 12),
           Row(
@@ -331,10 +403,12 @@ class _WorkerProfileEditScreenState
                 ),
               ),
               const SizedBox(width: 12),
-              Expanded(child: _GenderDropdown(
-                value: _gender,
-                onChanged: (v) => setState(() => _gender = v),
-              )),
+              Expanded(
+                child: _GenderDropdown(
+                  value: _gender,
+                  onChanged: _onGenderChanged,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -353,9 +427,7 @@ class _WorkerProfileEditScreenState
           _ServicesPicker(
             catalog: serviceCatalog,
             selected: selectedOptions,
-            onChanged: (list) => setState(
-              () => _selectedServiceIds = list.map((e) => e.id).toList(),
-            ),
+            onChanged: _onServicesChanged,
           ),
           const SizedBox(height: 16),
           Text('CNIC Scans', style: AppTypography.titleLarge),
@@ -381,60 +453,13 @@ class _WorkerProfileEditScreenState
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
           PrimaryButton(
-            label: 'Save Changes',
+            label: 'Save changes',
             isLoading: state.isSaving,
             onPressed: state.isSaving ? null : () => _onSave(vm),
           ),
-
-          const SizedBox(height: 20),
-        Card(
-          child: Column(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.notifications_outlined),
-                title: const Text('Notifications'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => context.push(Routes.notifications),
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.help_outline),
-                title: const Text('Help & Support'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => context.push(Routes.helpSupport),
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: Icon(Icons.logout, color: AppColors.danger),
-                title: Text(
-                  'Log out',
-                  style:
-                      AppTypography.titleLarge.copyWith(color: AppColors.danger),
-                ),
-                onTap: () => _logout(context),
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 28),
-
-        Text('Reviews Received', style: AppTypography.titleLarge),
-        const SizedBox(height: 10),
-        if (state.reviews.isEmpty)
-          const EmptyState(
-            icon: Icons.rate_review_outlined,
-            title: 'No reviews yet',
-            subtitle: 'Reviews from homeowners will appear here.',
-          )
-        else
-          for (final r in state.reviews) ...[
-            _ReviewTile(review: r),
-            const SizedBox(height: 8),
-          ],
-      ],
+        ],
       ),
     );
   }
@@ -444,255 +469,7 @@ class _WorkerProfileEditScreenState
     final tail = id.length > 6 ? id.substring(id.length - 6) : id;
     return 'Skill ··$tail';
   }
-
-  Future<void> _logout(BuildContext context) async {
-    final container = ProviderScope.containerOf(context, listen: false);
-    await ref.read(authViewModelProvider.notifier).signOut();
-    await app_router.reloadSkillPrefs(container);
-    if (!context.mounted) return;
-    context.go(app_router.skillTypePath);
-  }
 }
-
-class _WarningBanner extends StatelessWidget {
-  const _WarningBanner({required this.rating});
-
-  final double rating;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.danger.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.warning_amber_rounded,
-              color: AppColors.danger, size: 22),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'Your recent rating is ${rating.toStringAsFixed(1)}. '
-              'Account will be suspended below '
-              '${AppConstants.suspensionThreshold.toStringAsFixed(1)}.',
-              style: AppTypography.bodySmall
-                  .copyWith(color: AppColors.danger),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ReviewTile extends StatelessWidget {
-  const _ReviewTile({required this.review});
-
-  final Review review;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 12,
-            offset: const Offset(0, 2),
-            color: Colors.black.withValues(alpha: 0.04),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text('Anonymous Homeowner',
-                  style: AppTypography.titleLarge),
-              const Spacer(),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (var i = 1; i <= 5; i++)
-                    Icon(
-                      i <= review.rating.round()
-                          ? Icons.star_rounded
-                          : Icons.star_outline_rounded,
-                      size: 16,
-                      color: AppColors.accent,
-                    ),
-                ],
-              ),
-            ],
-          ),
-          if (review.comment != null && review.comment!.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(review.comment!, style: AppTypography.bodyMedium),
-          ],
-          const SizedBox(height: 4),
-          Text(
-            _daysAgo(review.createdAt),
-            style: AppTypography.bodySmall
-                .copyWith(color: AppColors.textMuted),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static String _daysAgo(DateTime dt) {
-    final days = DateTime.now().difference(dt).inDays;
-    if (days == 0) return 'Today';
-    if (days == 1) return 'Yesterday';
-    return '$days days ago';
-  }
-}
-
-class _WorkerStatusRow extends StatelessWidget {
-  const _WorkerStatusRow({required this.labour});
-
-  final sc.UserModel? labour;
-
-  @override
-  Widget build(BuildContext context) {
-    final u = labour;
-    if (u == null) return const SizedBox.shrink();
-
-    final status = u.status.trim();
-    final verified = u.verified;
-    final chips = <Widget>[
-      _StatusPill(
-        icon: Icons.construction_rounded,
-        label: 'Worker',
-        background: AppColors.primary.withValues(alpha: 0.08),
-        foreground: AppColors.primary,
-      ),
-      if (status.isNotEmpty)
-        _StatusPill(
-          icon: status.toLowerCase() == 'approved'
-              ? Icons.check_circle_outline_rounded
-              : Icons.hourglass_top_rounded,
-          label: _capitalize(status),
-          background: (status.toLowerCase() == 'approved'
-                  ? AppColors.success
-                  : AppColors.warning)
-              .withValues(alpha: 0.10),
-          foreground: status.toLowerCase() == 'approved'
-              ? AppColors.success
-              : AppColors.warning,
-        ),
-      if (verified)
-        _StatusPill(
-          icon: Icons.verified_rounded,
-          label: 'Verified',
-          background: AppColors.success.withValues(alpha: 0.10),
-          foreground: AppColors.success,
-        ),
-    ];
-    return Wrap(
-      spacing: 8,
-      runSpacing: 6,
-      alignment: WrapAlignment.center,
-      children: chips,
-    );
-  }
-
-  static String _capitalize(String s) =>
-      s.isEmpty ? s : s[0].toUpperCase() + s.substring(1).toLowerCase();
-}
-
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({
-    required this.icon,
-    required this.label,
-    required this.background,
-    required this.foreground,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color background;
-  final Color foreground;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: foreground),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: AppTypography.labelMedium.copyWith(
-              color: foreground,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ReadOnlyInfoCard extends StatelessWidget {
-  const _ReadOnlyInfoCard({required this.worker, required this.labour});
-
-  final Worker worker;
-  final sc.UserModel? labour;
-
-  @override
-  Widget build(BuildContext context) {
-    final email = (labour?.email ?? worker.email).trim();
-    if (email.isEmpty) return const SizedBox.shrink();
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: _InfoRow(
-        icon: Icons.email_outlined,
-        label: 'Email',
-        value: email,
-      ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(icon, color: AppColors.textMuted),
-      title: Text(
-        label,
-        style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
-      ),
-      subtitle: Text(value, style: AppTypography.bodyMedium),
-      dense: true,
-    );
-  }
-}
-
 
 class _AvatarPicker extends StatelessWidget {
   const _AvatarPicker({
@@ -717,8 +494,11 @@ class _AvatarPicker extends StatelessWidget {
             pickedFile: pickedFile,
             radius: 44,
             backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-            placeholder: const Icon(Icons.person_rounded,
-                size: 40, color: AppColors.primary),
+            placeholder: const Icon(
+              Icons.person_rounded,
+              size: 40,
+              color: AppColors.primary,
+            ),
           ),
           Positioned(
             right: 0,
@@ -730,8 +510,11 @@ class _AvatarPicker extends StatelessWidget {
                 shape: BoxShape.circle,
                 border: Border.all(color: AppColors.background, width: 2),
               ),
-              child: const Icon(Icons.photo_camera_outlined,
-                  size: 14, color: Colors.white),
+              child: const Icon(
+                Icons.photo_camera_outlined,
+                size: 14,
+                color: Colors.white,
+              ),
             ),
           ),
         ],
@@ -754,6 +537,7 @@ class _GenderDropdown extends StatelessWidget {
         Text('Gender', style: Theme.of(context).textTheme.labelLarge),
         const SizedBox(height: 6),
         DropdownButtonFormField<String>(
+          key: ValueKey(value ?? 'unset'),
           initialValue: value,
           items: const [
             DropdownMenuItem(value: 'male', child: Text('Male')),
@@ -761,9 +545,7 @@ class _GenderDropdown extends StatelessWidget {
             DropdownMenuItem(value: 'other', child: Text('Other')),
           ],
           onChanged: onChanged,
-          decoration: const InputDecoration(
-            hintText: 'Select',
-          ),
+          decoration: const InputDecoration(hintText: 'Select'),
         ),
       ],
     );
@@ -847,10 +629,20 @@ class _CnicPickerTile extends StatelessWidget {
     if (pickedFile != null) {
       preview = Image.file(pickedFile!, fit: BoxFit.cover);
     } else if (existingUrl != null && existingUrl!.isNotEmpty) {
-      preview = Image.network(
-        existingUrl!,
+      preview = CachedNetworkImage(
+        imageUrl: existingUrl!,
         fit: BoxFit.cover,
-        errorBuilder: (_, _, _) => _placeholder(context),
+        placeholder: (context, url) => Center(
+          child: SizedBox(
+            width: 28,
+            height: 28,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: AppColors.primary.withValues(alpha: 0.6),
+            ),
+          ),
+        ),
+        errorWidget: (context, url, error) => _loadErrorPlaceholder(context),
       );
     } else {
       preview = _placeholder(context);
@@ -879,20 +671,30 @@ class _CnicPickerTile extends StatelessWidget {
                       bottom: 6,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.55),
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
-                          children: const [
-                            Icon(Icons.photo_camera_outlined,
-                                size: 12, color: Colors.white),
-                            SizedBox(width: 4),
+                          children: [
+                            const Icon(
+                              Icons.photo_camera_outlined,
+                              size: 12,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 4),
                             Text(
-                              'Replace',
-                              style: TextStyle(
+                              pickedFile != null
+                                  ? 'Replace'
+                                  : (existingUrl != null &&
+                                            existingUrl!.isNotEmpty
+                                        ? 'Update'
+                                        : 'Upload'),
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w500,
@@ -913,18 +715,38 @@ class _CnicPickerTile extends StatelessWidget {
   }
 
   Widget _placeholder(BuildContext context) => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.badge_outlined,
-                color: AppColors.textMuted, size: 28),
-            const SizedBox(height: 4),
-            Text(
-              'Tap to upload',
-              style: AppTypography.bodySmall
-                  .copyWith(color: AppColors.textMuted),
-            ),
-          ],
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.badge_outlined, color: AppColors.textMuted, size: 28),
+        const SizedBox(height: 4),
+        Text(
+          'Tap to upload',
+          style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
         ),
-      );
+      ],
+    ),
+  );
+
+  Widget _loadErrorPlaceholder(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(8),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.broken_image_outlined,
+            color: AppColors.textMuted,
+            size: 28,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Could not load image',
+            textAlign: TextAlign.center,
+            style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+          ),
+        ],
+      ),
+    ),
+  );
 }

@@ -39,6 +39,9 @@ class OpenedChat {
 abstract class ChatRepository {
   Stream<List<ChatSummary>> watchUserChats(String userId);
 
+  /// Force a fresh fetch of the inbox from the backend. Used by pull-to-refresh.
+  Future<void> refreshUserChats(String userId);
+
   /// For server room ids: peer id cached on this device / in the active chat session.
   String? cachedPeerIdForChat(String chatId, String viewerId);
 

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:skilllink/skillink/domain/models/service_request.dart';
@@ -402,11 +403,16 @@ class _StepAddress extends StatefulWidget {
 
 class _StepAddressState extends State<_StepAddress> {
   late final TextEditingController _addressCtrl;
+  late final TextEditingController _expectedCtrl;
 
   @override
   void initState() {
     super.initState();
     _addressCtrl = TextEditingController(text: widget.state.serviceAddress);
+    final exp = widget.state.expectedAmount;
+    _expectedCtrl = TextEditingController(
+      text: exp == null || exp == 0 ? '' : exp.toInt().toString(),
+    );
   }
 
   @override
@@ -421,6 +427,7 @@ class _StepAddressState extends State<_StepAddress> {
   @override
   void dispose() {
     _addressCtrl.dispose();
+    _expectedCtrl.dispose();
     super.dispose();
   }
 
@@ -444,6 +451,32 @@ class _StepAddressState extends State<_StepAddress> {
           controller: _addressCtrl,
           maxLines: 3,
           onChanged: widget.vm.setServiceAddress,
+        ),
+        const SizedBox(height: 24),
+        Text('Expected amount', style: AppTypography.titleLarge),
+        const SizedBox(height: 4),
+        Text(
+          'How much do you expect to pay (PKR)? Workers see this on the post '
+          'and use it to set their bids. Required.',
+          style: AppTypography.bodySmall
+              .copyWith(color: AppColors.textMuted),
+        ),
+        const SizedBox(height: 12),
+        AppTextField(
+          label: 'Expected amount (PKR)',
+          hint: 'e.g. 5000',
+          controller: _expectedCtrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: false),
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(10),
+          ],
+          onChanged: (v) {
+            final parsed = num.tryParse(v.trim());
+            widget.vm.setExpectedAmount(
+              (parsed != null && parsed > 0) ? parsed : null,
+            );
+          },
         ),
         const SizedBox(height: 24),
         Text('Payment method', style: AppTypography.titleLarge),

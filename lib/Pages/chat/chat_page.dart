@@ -138,15 +138,6 @@ class ChatBubble extends StatelessWidget {
                 ],
               ),
             ),
-            if (showAvatar && !isGrouped) ...[
-              const SizedBox(width: 8),
-              UserAvatar(
-                imageRef: null,
-                radius: 16,
-                backgroundColor: Colors.grey.shade300,
-              ),
-            ] else if (!showAvatar && !isGrouped)
-              const SizedBox(width: 40),
           ],
         ),
       );
@@ -157,13 +148,6 @@ class ChatBubble extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.start,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            if (showAvatar && !isGrouped)
-              UserAvatar(
-                imageRef: senderAvatar,
-                radius: 16,
-                backgroundColor: Colors.grey.shade300,
-              ),
-            if (showAvatar && !isGrouped) const SizedBox(width: 8),
             Flexible(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -221,7 +205,6 @@ class ChatBubble extends StatelessWidget {
                 ],
               ),
             ),
-            if (!showAvatar && !isGrouped) const SizedBox(width: 40),
           ],
         ),
       );
@@ -304,12 +287,6 @@ class TypingIndicator extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       child: Row(
         children: [
-          UserAvatar(
-            imageRef: null,
-            radius: 16,
-            backgroundColor: Colors.grey.shade300,
-          ),
-          const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
@@ -492,15 +469,18 @@ class _ChatScreenState extends State<ChatScreen> {
 
   String _humanizeError(Object e) {
     var msg = e.toString();
-    if (msg.startsWith('Bad state: ')) msg = msg.substring('Bad state: '.length);
-    if (msg.startsWith('Exception: ')) msg = msg.substring('Exception: '.length);
+    if (msg.startsWith('Bad state: '))
+      msg = msg.substring('Bad state: '.length);
+    if (msg.startsWith('Exception: '))
+      msg = msg.substring('Exception: '.length);
     final lower = msg.toLowerCase();
-    if (lower.contains('internal server error') ||
-        lower.contains('500')) {
+    if (lower.contains('internal server error') || lower.contains('500')) {
       return "We couldn't open this chat right now. Please try again in a moment.";
     }
-    if (lower.contains('socket') || lower.contains('network') ||
-        lower.contains('timeout') || lower.contains('timed out')) {
+    if (lower.contains('socket') ||
+        lower.contains('network') ||
+        lower.contains('timeout') ||
+        lower.contains('timed out')) {
       return 'Network hiccup — check your connection and retry.';
     }
     if (lower.contains('unauthori') || lower.contains('401')) {
@@ -651,8 +631,9 @@ class _ChatScreenState extends State<ChatScreen> {
               Stack(
                 children: [
                   UserAvatar(
-                    imageRef:
-                        chatUserAvatar.trim().isEmpty ? null : chatUserAvatar,
+                    imageRef: chatUserAvatar.trim().isEmpty
+                        ? null
+                        : chatUserAvatar,
                     radius: 20,
                     backgroundColor: Colors.grey.shade300,
                   ),
@@ -675,6 +656,7 @@ class _ChatScreenState extends State<ChatScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
@@ -683,13 +665,6 @@ class _ChatScreenState extends State<ChatScreen> {
                         color: Colors.black,
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(
-                      _statusLine(isOnline),
-                      style: TextStyle(
-                        color: _statusLineColor(isOnline),
-                        fontSize: 12,
                       ),
                     ),
                   ],
@@ -752,8 +727,7 @@ class _ChatScreenState extends State<ChatScreen> {
       body: Column(
         children: [
           Expanded(
-            child: _isBootstrapping ||
-                    (_isLoadingHistory && _messages.isEmpty)
+            child: _isBootstrapping || (_isLoadingHistory && _messages.isEmpty)
                 ? const Center(child: CircularProgressIndicator())
                 : _bootstrapError != null
                 ? Center(
@@ -815,38 +789,41 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   )
                 : ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: _messages.length + (_isRemoteTyping ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (index == _messages.length && _isRemoteTyping) {
-                  return const TypingIndicator();
-                }
+                    controller: _scrollController,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount: _messages.length + (_isRemoteTyping ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == _messages.length && _isRemoteTyping) {
+                        return const TypingIndicator();
+                      }
 
-                final message = _messages[index];
-                final showAvatar = _shouldShowAvatar(index);
-                final isGrouped = _isGrouped(index);
-                final showDateDivider = _shouldShowDateDivider(index);
+                      final message = _messages[index];
+                      final showAvatar = _shouldShowAvatar(index);
+                      final isGrouped = _isGrouped(index);
+                      final showDateDivider = _shouldShowDateDivider(index);
 
-                return Column(
-                  children: [
-                    if (showDateDivider) DateDivider(date: message.timestamp),
-                    ChatBubble(
-                      message: message,
-                      currentUserId: _chatService.currentUserId,
-                      senderName: message.isFrom(_chatService.currentUserId)
-                          ? null
-                          : chatUserName,
-                      senderAvatar: message.isFrom(_chatService.currentUserId)
-                          ? null
-                          : chatUserAvatar,
-                      showAvatar: showAvatar,
-                      isGrouped: isGrouped,
-                    ),
-                  ],
-                );
-              },
-            ),
+                      return Column(
+                        children: [
+                          if (showDateDivider)
+                            DateDivider(date: message.timestamp),
+                          ChatBubble(
+                            message: message,
+                            currentUserId: _chatService.currentUserId,
+                            senderName:
+                                message.isFrom(_chatService.currentUserId)
+                                ? null
+                                : chatUserName,
+                            senderAvatar:
+                                message.isFrom(_chatService.currentUserId)
+                                ? null
+                                : chatUserAvatar,
+                            showAvatar: showAvatar,
+                            isGrouped: isGrouped,
+                          ),
+                        ],
+                      );
+                    },
+                  ),
           ),
 
           Container(
@@ -870,8 +847,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         Icons.add_circle_outline,
                         color: Colors.grey.shade600,
                       ),
-                      onPressed: () {
-                      },
+                      onPressed: () {},
                     ),
                     Expanded(
                       child: TextField(

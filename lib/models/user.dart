@@ -128,7 +128,13 @@ class UserModel {
             json['phone'] ??
             '')
         .toString();
-    final profilePic = (json['profilePic'] ?? json['profile_pic'])?.toString();
+    final profilePic = (json['profilePic'] ??
+            json['profile_pic'] ??
+            json['avatarUrl'] ??
+            json['avatar_url'] ??
+            json['profileImage'] ??
+            json['profile_image'])
+        ?.toString();
     final portfolio = (json['portfolio'])?.toString();
     final resume = (json['resume'])?.toString();
     final verified = json['verified'] == true;

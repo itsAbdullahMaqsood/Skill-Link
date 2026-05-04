@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skilllink/skillink/data/providers.dart';
+import 'package:skilllink/skillink/data/repositories/service_request_repository.dart';
 import 'package:skilllink/skillink/domain/models/app_user.dart';
 
 class AuthState {
@@ -44,6 +45,15 @@ class AuthViewModel extends StateNotifier<AuthState> {
 
   final Ref _ref;
 
+  void _invalidateMyOpenJobPostCaches() {
+    // recentLocalWorkerOpenBidsProvider watches authViewModelProvider —
+    // invalidating it from here causes CircularDependencyError. It rebuilds
+    // automatically when the watched auth state changes.
+    _ref
+      ..invalidate(myOpenJobPostsProvider(ServiceRequestRole.worker))
+      ..invalidate(myOpenJobPostsProvider(ServiceRequestRole.customer));
+  }
+
   Future<void> _restoreSession() async {
     final repo = _ref.read(authRepositoryProvider);
     final result = await repo.getCurrentUser();
@@ -62,7 +72,11 @@ class AuthViewModel extends StateNotifier<AuthState> {
   }
 
   void setUser(AppUser user, {bool profileComplete = true}) {
+    final prevId = state.user?.id;
     state = AuthState(user: user, profileComplete: profileComplete);
+    if (prevId != user.id) {
+      _invalidateMyOpenJobPostCaches();
+    }
   }
 
   Future<void> signOut() async {
@@ -70,21 +84,32 @@ class AuthViewModel extends StateNotifier<AuthState> {
     final repo = _ref.read(authRepositoryProvider);
     await repo.signOut();
     if (!mounted) return;
+    _invalidateMyOpenJobPostCaches();
     state = const AuthState();
   }
 
   Future<void> reloadSession() async {
+    await _ref.read(skillChainAuthServiceProvider).refreshCurrentUserFromApi();
+    if (!mounted) return;
     final res = await _ref.read(authRepositoryProvider).getCurrentUser();
     if (!mounted) return;
     res.when(
       success: (user) {
         if (user == null) {
+          final hadUser = state.user != null;
           state = const AuthState();
+          if (hadUser) {
+            _invalidateMyOpenJobPostCaches();
+          }
         } else {
+          final prevId = state.user?.id;
           state = AuthState(
             user: user,
             profileComplete: user.profileComplete,
           );
+          if (prevId != user.id) {
+            _invalidateMyOpenJobPostCaches();
+          }
         }
       },
       failure: (message, _) {

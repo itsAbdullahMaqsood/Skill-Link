@@ -15,8 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$PostedJobBid {
 
- String get bidId; String get jobId;/// Worker who submitted this bid (null for pure homeowner counter rows if ever needed).
- String? get workerId;@JsonKey(fromJson: _postedBidOfferedByFromJson, toJson: _postedBidOfferedByToJson) PostedBidOfferedBy get offeredBy; double get visitingCharges; double get jobChargesEstimate; String? get note; int get etaMinutes; DateTime get submittedAt;@JsonKey(fromJson: _postedBidStatusFromJson, toJson: _postedBidStatusToJson) PostedBidStatus get status;
+ String get bidId; String get jobId; String? get workerId;@JsonKey(fromJson: _postedBidOfferedByFromJson, toJson: _postedBidOfferedByToJson) PostedBidOfferedBy get offeredBy; double get visitingCharges; double get jobChargesEstimate; String? get note; int get etaMinutes; DateTime get submittedAt;@JsonKey(fromJson: _postedBidStatusFromJson, toJson: _postedBidStatusToJson) PostedBidStatus get status;
 /// Create a copy of PostedJobBid
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -224,7 +223,6 @@ class _PostedJobBid implements PostedJobBid {
 
 @override final  String bidId;
 @override final  String jobId;
-/// Worker who submitted this bid (null for pure homeowner counter rows if ever needed).
 @override final  String? workerId;
 @override@JsonKey(fromJson: _postedBidOfferedByFromJson, toJson: _postedBidOfferedByToJson) final  PostedBidOfferedBy offeredBy;
 @override final  double visitingCharges;

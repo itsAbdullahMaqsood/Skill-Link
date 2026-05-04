@@ -61,6 +61,7 @@ class WorkerFromSkillChainUser {
       role: u.labourApiRole.trim().isEmpty ? null : u.labourApiRole.trim(),
       accountStatus: u.status.trim().isEmpty ? null : u.status.trim(),
       experienceNote: experienceNote,
+      location: u.location.trim().isEmpty ? null : u.location.trim(),
     );
   }
 }

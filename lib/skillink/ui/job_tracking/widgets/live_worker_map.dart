@@ -1,16 +1,15 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:skilllink/skillink/data/services/directions_service.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_colors.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_typography.dart';
+import 'package:skilllink/skillink/utils/haversine.dart';
+import 'package:skilllink/skillink/utils/worker_marker_bitmap.dart';
 
 class LiveWorkerMap extends StatefulWidget {
   const LiveWorkerMap({
@@ -39,6 +38,7 @@ class _LiveWorkerMapState extends State<LiveWorkerMap> {
   LatLng? _lastRouteAnchor;
   bool _isFetchingRoute = false;
   Timer? _routeDebounce;
+  DateTime? _lastFixAt;
 
   static const double _routeRefreshMeters = 150;
 
@@ -48,10 +48,8 @@ class _LiveWorkerMapState extends State<LiveWorkerMap> {
 
   LatLng get _home => LatLng(widget.homeLocation.lat, widget.homeLocation.lng);
 
-  LatLng get _seededWorker => LatLng(
-        widget.homeLocation.lat + 0.006,
-        widget.homeLocation.lng + 0.006,
-      );
+  LatLng get _seededWorker =>
+      LatLng(widget.homeLocation.lat + 0.006, widget.homeLocation.lng + 0.006);
 
   LatLng get _effectiveWorker => _worker ?? _seededWorker;
 
@@ -65,7 +63,10 @@ class _LiveWorkerMapState extends State<LiveWorkerMap> {
     _sub = widget.locationStream.listen(
       (p) {
         if (!mounted) return;
-        setState(() => _worker = LatLng(p.lat, p.lng));
+        setState(() {
+          _worker = LatLng(p.lat, p.lng);
+          _lastFixAt = DateTime.now().toUtc();
+        });
         if (!_didInitialFit) {
           _didInitialFit = true;
           _fitBounds();
@@ -130,7 +131,8 @@ class _LiveWorkerMapState extends State<LiveWorkerMap> {
     final dLng = _toRadians(b.longitude - a.longitude);
     final sinDLat = math.sin(dLat / 2);
     final sinDLng = math.sin(dLng / 2);
-    final h = sinDLat * sinDLat +
+    final h =
+        sinDLat * sinDLat +
         math.cos(_toRadians(a.latitude)) *
             math.cos(_toRadians(b.latitude)) *
             sinDLng *
@@ -172,37 +174,101 @@ class _LiveWorkerMapState extends State<LiveWorkerMap> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 240,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: _mapFailed
-          ? _MapFallback(worker: _worker, home: _home)
-          : Stack(
-              children: [
-                _buildMap(),
-                Positioned(
-                  right: 12,
-                  bottom: 12,
-                  child: _RecenterButton(onPressed: _fitBounds),
-                ),
-              ],
+    if (_mapFailed) {
+      return Container(
+        height: 240,
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: _MapFallback(worker: _worker, home: _home),
+      );
+    }
+
+    final w = _effectiveWorker;
+    final etaMin = etaMinutesFromHaversine(
+      w.latitude,
+      w.longitude,
+      _home.latitude,
+      _home.longitude,
+    );
+    final distanceKm = haversineKm(
+      w.latitude,
+      w.longitude,
+      _home.latitude,
+      _home.longitude,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          height: 240,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.border),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            children: [
+              _buildMap(),
+              Positioned(
+                right: 12,
+                bottom: 12,
+                child: _RecenterButton(onPressed: _fitBounds),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            const Icon(
+              Icons.directions_car_rounded,
+              size: 18,
+              color: AppColors.primary,
             ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                'ETA ~$etaMin min · ${distanceKm.toStringAsFixed(1)} km',
+                style: AppTypography.titleLarge.copyWith(fontSize: 14),
+              ),
+            ),
+            Text(
+              _worker == null
+                  ? 'Approx. location'
+                  : _formatFixAge(_lastFixAt ?? DateTime.now().toUtc()),
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textMuted,
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: 16),
+      ],
     );
   }
 
+  String _formatFixAge(DateTime ts) {
+    final diff = DateTime.now().toUtc().difference(ts.toUtc());
+    if (diff.inSeconds < 30) return 'Just now';
+    if (diff.inMinutes < 1) return '${diff.inSeconds}s ago';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    return '${diff.inHours}h ago';
+  }
+
   Future<void> _loadWorkerIcon() async {
-    final cached = _WorkerIconCache.instance;
+    final cached = WorkerMarkerBitmap.cachedOrNull;
     if (cached != null) {
       if (!mounted) return;
       setState(() => _workerIcon = cached);
       return;
     }
-    final descriptor = await _WorkerIconCache.load();
+    final descriptor = await WorkerMarkerBitmap.load();
     if (!mounted) return;
     setState(() => _workerIcon = descriptor);
   }
@@ -224,9 +290,7 @@ class _LiveWorkerMapState extends State<LiveWorkerMap> {
         }
       },
       gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
-        Factory<OneSequenceGestureRecognizer>(
-          () => EagerGestureRecognizer(),
-        ),
+        Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
       },
       scrollGesturesEnabled: true,
       zoomGesturesEnabled: true,
@@ -247,10 +311,9 @@ class _LiveWorkerMapState extends State<LiveWorkerMap> {
         Marker(
           markerId: const MarkerId('worker'),
           position: w,
-          icon: _workerIcon ??
-              BitmapDescriptor.defaultMarkerWithHue(
-                BitmapDescriptor.hueRed,
-              ),
+          icon:
+              _workerIcon ??
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
           anchor: const Offset(0.5, 1.0),
           infoWindow: InfoWindow(
             title: 'Worker',
@@ -264,7 +327,9 @@ class _LiveWorkerMapState extends State<LiveWorkerMap> {
 
   Set<Polyline> _buildPolylines(LatLng worker) {
     final road = _routePoints;
-    final points = (road != null && road.length >= 2) ? road : <LatLng>[_home, worker];
+    final points = (road != null && road.length >= 2)
+        ? road
+        : <LatLng>[_home, worker];
     return <Polyline>{
       Polyline(
         polylineId: const PolylineId('home-to-worker'),
@@ -294,8 +359,11 @@ class _RecenterButton extends StatelessWidget {
         onTap: onPressed,
         child: const Padding(
           padding: EdgeInsets.all(10),
-          child: Icon(Icons.my_location_rounded,
-              size: 20, color: AppColors.primary),
+          child: Icon(
+            Icons.my_location_rounded,
+            size: 20,
+            color: AppColors.primary,
+          ),
         ),
       ),
     );
@@ -314,20 +382,15 @@ class _MapFallback extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.map_outlined,
-              size: 32, color: AppColors.textMuted),
+          const Icon(Icons.map_outlined, size: 32, color: AppColors.textMuted),
           const SizedBox(height: 8),
-          Text(
-            'Live map unavailable',
-            style: AppTypography.titleLarge,
-          ),
+          Text('Live map unavailable', style: AppTypography.titleLarge),
           const SizedBox(height: 4),
           Text(
             'Home: '
             '${home.latitude.toStringAsFixed(4)}, '
             '${home.longitude.toStringAsFixed(4)}',
-            style: AppTypography.bodySmall
-                .copyWith(color: AppColors.textMuted),
+            style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 2),
@@ -335,58 +398,13 @@ class _MapFallback extends StatelessWidget {
             worker == null
                 ? 'Waiting for worker location…'
                 : 'Worker: '
-                    '${worker!.latitude.toStringAsFixed(4)}, '
-                    '${worker!.longitude.toStringAsFixed(4)}',
-            style: AppTypography.bodySmall
-                .copyWith(color: AppColors.textMuted),
+                      '${worker!.latitude.toStringAsFixed(4)}, '
+                      '${worker!.longitude.toStringAsFixed(4)}',
+            style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
             textAlign: TextAlign.center,
           ),
         ],
       ),
     );
-  }
-}
-
-class _WorkerIconCache {
-  static BitmapDescriptor? _cached;
-  static Future<BitmapDescriptor?>? _inFlight;
-
-  static const int _targetPx = 96;
-
-  static BitmapDescriptor? get instance => _cached;
-
-  static Future<BitmapDescriptor?> load() {
-    if (_cached != null) return Future.value(_cached);
-    return _inFlight ??= _decode().whenComplete(() => _inFlight = null);
-  }
-
-  static Future<BitmapDescriptor?> _decode() async {
-    try {
-      final svg = await rootBundle.loadString('assets/icons/worker.svg');
-      final match = RegExp(r'base64,([^"\s]+)').firstMatch(svg);
-      if (match == null) return null;
-      final b64 = match.group(1);
-      if (b64 == null || b64.isEmpty) return null;
-      final pngBytes = base64Decode(b64);
-
-      final codec = await ui.instantiateImageCodec(
-        pngBytes,
-        targetWidth: _targetPx,
-        targetHeight: _targetPx,
-      );
-      final frame = await codec.getNextFrame();
-      final resized = await frame.image.toByteData(
-        format: ui.ImageByteFormat.png,
-      );
-      if (resized == null) return null;
-
-      final descriptor = BitmapDescriptor.bytes(
-        Uint8List.view(resized.buffer),
-      );
-      _cached = descriptor;
-      return descriptor;
-    } on Exception {
-      return null;
-    }
   }
 }

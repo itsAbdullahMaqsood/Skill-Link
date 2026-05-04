@@ -12,6 +12,8 @@ class CreateOpenJobPostInput {
     required this.timeSlotEnd,
     required this.serviceAddress,
     required this.paymentMethod,
+    required this.expectedAmount,
+    this.expectedCurrency = 'PKR',
     this.localPhotoPaths = const <String>[],
   });
 
@@ -24,6 +26,9 @@ class CreateOpenJobPostInput {
 
   final String serviceAddress;
   final ServiceRequestPaymentMethod paymentMethod;
+
+  final num expectedAmount;
+  final String expectedCurrency;
 
   final List<String> localPhotoPaths;
 }
@@ -54,7 +59,8 @@ abstract class OpenJobPostRepository {
   Future<Result<OpenJobPostBid>> submitOpenJobPostBid({
     required String id,
     required num amount,
-    required String currency,
+    required num visitingFee,
+    String currency = 'PKR',
     String? note,
   });
 
@@ -64,4 +70,10 @@ abstract class OpenJobPostRepository {
   });
 
   Future<Result<OpenJobPost>> cancelOpenJobPost(String id);
+
+  Future<Result<OpenJobPost>> updateExpectedAmount({
+    required String postId,
+    required num amount,
+    String currency = 'PKR',
+  });
 }

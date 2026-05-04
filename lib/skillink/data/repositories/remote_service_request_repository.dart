@@ -103,10 +103,11 @@ class RemoteServiceRequestRepository implements ServiceRequestRepository {
   Future<Result<ServiceRequest>> customerCounterOffer({
     required String id,
     required num amount,
-    required String currency,
+    required num visitingFee,
+    String currency = 'PKR',
   }) =>
       _postBid('/request-services/$id/customer/counter-offer',
-          amount: amount, currency: currency);
+          amount: amount, visitingFee: visitingFee, currency: currency);
 
   @override
   Future<Result<ServiceRequest>> customerAcceptBid(String id) =>
@@ -125,10 +126,11 @@ class RemoteServiceRequestRepository implements ServiceRequestRepository {
   Future<Result<ServiceRequest>> workerBid({
     required String id,
     required num amount,
-    required String currency,
+    required num visitingFee,
+    String currency = 'PKR',
   }) =>
       _postBid('/request-services/$id/worker/bid',
-          amount: amount, currency: currency);
+          amount: amount, visitingFee: visitingFee, currency: currency);
 
   @override
   Future<Result<ServiceRequest>> workerOnTheWay(String id) =>
@@ -162,12 +164,17 @@ class RemoteServiceRequestRepository implements ServiceRequestRepository {
   Future<Result<ServiceRequest>> _postBid(
     String path, {
     required num amount,
+    required num visitingFee,
     required String currency,
   }) async {
     try {
       final res = await _api.post<Map<String, dynamic>>(
         path,
-        data: <String, dynamic>{'amount': amount, 'currency': currency},
+        data: <String, dynamic>{
+          'amount': amount,
+          'visitingFee': visitingFee,
+          'currency': currency,
+        },
       );
       final data = res.data;
       if (data == null) {

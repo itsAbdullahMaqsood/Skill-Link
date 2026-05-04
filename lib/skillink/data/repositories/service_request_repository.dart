@@ -49,7 +49,8 @@ abstract class ServiceRequestRepository {
   Future<Result<ServiceRequest>> customerCounterOffer({
     required String id,
     required num amount,
-    required String currency,
+    required num visitingFee,
+    String currency = 'PKR',
   });
 
   Future<Result<ServiceRequest>> customerAcceptBid(String id);
@@ -62,7 +63,8 @@ abstract class ServiceRequestRepository {
   Future<Result<ServiceRequest>> workerBid({
     required String id,
     required num amount,
-    required String currency,
+    required num visitingFee,
+    String currency = 'PKR',
   });
 
   Future<Result<ServiceRequest>> workerOnTheWay(String id);

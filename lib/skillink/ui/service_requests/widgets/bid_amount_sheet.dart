@@ -4,9 +4,10 @@ import 'package:skilllink/skillink/ui/core/themes/app_colors.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_typography.dart';
 
 class BidAmountResult {
-  const BidAmountResult({required this.amount, required this.currency});
+  const BidAmountResult({required this.amount, required this.visitingFee});
   final num amount;
-  final String currency;
+  final num visitingFee;
+  String get currency => 'PKR';
 }
 
 Future<BidAmountResult?> showBidAmountSheet(
@@ -14,7 +15,7 @@ Future<BidAmountResult?> showBidAmountSheet(
   required String title,
   required String ctaLabel,
   num? suggestedAmount,
-  String defaultCurrency = 'PKR',
+  num? suggestedVisitingFee,
   String? helperText,
 }) {
   return showModalBottomSheet<BidAmountResult>(
@@ -28,7 +29,7 @@ Future<BidAmountResult?> showBidAmountSheet(
       title: title,
       ctaLabel: ctaLabel,
       suggestedAmount: suggestedAmount,
-      defaultCurrency: defaultCurrency,
+      suggestedVisitingFee: suggestedVisitingFee,
       helperText: helperText,
     ),
   );
@@ -39,14 +40,14 @@ class _BidAmountSheet extends StatefulWidget {
     required this.title,
     required this.ctaLabel,
     required this.suggestedAmount,
-    required this.defaultCurrency,
+    required this.suggestedVisitingFee,
     required this.helperText,
   });
 
   final String title;
   final String ctaLabel;
   final num? suggestedAmount;
-  final String defaultCurrency;
+  final num? suggestedVisitingFee;
   final String? helperText;
 
   @override
@@ -55,45 +56,63 @@ class _BidAmountSheet extends StatefulWidget {
 
 class _BidAmountSheetState extends State<_BidAmountSheet> {
   late final TextEditingController _amountCtrl;
-  late String _currency;
+  late final TextEditingController _visitCtrl;
   String? _error;
-
-  static const _currencies = <String>['PKR', 'USD'];
 
   @override
   void initState() {
     super.initState();
-    final seed = widget.suggestedAmount;
     _amountCtrl = TextEditingController(
-      text: seed == null || seed == 0 ? '' : _formatSeed(seed),
+      text: _seedText(widget.suggestedAmount),
     );
-    _currency = widget.defaultCurrency;
+    _visitCtrl = TextEditingController(
+      text: _seedText(widget.suggestedVisitingFee),
+    );
+    _amountCtrl.addListener(_onChanged);
+    _visitCtrl.addListener(_onChanged);
   }
 
   @override
   void dispose() {
     _amountCtrl.dispose();
+    _visitCtrl.dispose();
     super.dispose();
   }
 
-  String _formatSeed(num n) =>
-      n == n.truncate() ? n.toInt().toString() : n.toString();
+  void _onChanged() {
+    if (mounted) setState(() {});
+  }
+
+  String _seedText(num? n) {
+    if (n == null || n == 0) return '';
+    return n == n.truncate() ? n.toInt().toString() : n.toString();
+  }
+
+  num? _parsedAmount() => num.tryParse(_amountCtrl.text.trim());
+  num? _parsedVisit() => num.tryParse(_visitCtrl.text.trim());
 
   void _submit() {
     FocusScope.of(context).unfocus();
-    final raw = _amountCtrl.text.trim();
-    final parsed = num.tryParse(raw);
-    if (parsed == null || parsed <= 0) {
-      setState(() => _error = 'Enter a positive amount');
+    final amt = _parsedAmount();
+    final vis = _parsedVisit();
+    if (amt == null || amt <= 0) {
+      setState(() => _error = 'Enter a positive labour amount');
+      return;
+    }
+    if (vis == null || vis < 0) {
+      setState(() => _error = 'Enter a valid visiting fee (0 or more)');
       return;
     }
     Navigator.of(context)
-        .pop(BidAmountResult(amount: parsed, currency: _currency));
+        .pop(BidAmountResult(amount: amt, visitingFee: vis));
   }
 
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final amt = _parsedAmount() ?? 0;
+    final vis = _parsedVisit() ?? 0;
+    final total = amt + vis;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(20, 14, 20, 20 + bottomInset),
@@ -122,77 +141,21 @@ class _BidAmountSheetState extends State<_BidAmountSheet> {
             ),
           ],
           const SizedBox(height: 18),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: 3,
-                child: TextField(
-                  controller: _amountCtrl,
-                  autofocus: true,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                  ],
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => _submit(),
-                  style: AppTypography.titleLarge,
-                  decoration: InputDecoration(
-                    labelText: 'Amount',
-                    errorText: _error,
-                    filled: true,
-                    fillColor: AppColors.surface,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: AppColors.border),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: AppColors.border),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide:
-                          const BorderSide(color: AppColors.primary, width: 2),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: DropdownButtonFormField<String>(
-                  initialValue: _currency,
-                  items: _currencies
-                      .map((c) =>
-                          DropdownMenuItem<String>(value: c, child: Text(c)))
-                      .toList(),
-                  onChanged: (v) =>
-                      setState(() => _currency = v ?? _currency),
-                  decoration: InputDecoration(
-                    labelText: 'Currency',
-                    filled: true,
-                    fillColor: AppColors.surface,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: AppColors.border),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: AppColors.border),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide:
-                          const BorderSide(color: AppColors.primary, width: 2),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+          _AmountField(
+            label: 'Labour amount',
+            controller: _amountCtrl,
+            autofocus: true,
+            errorText: _error,
+            onSubmitted: (_) => _submit(),
           ),
+          const SizedBox(height: 12),
+          _AmountField(
+            label: 'Visiting fee',
+            controller: _visitCtrl,
+            onSubmitted: (_) => _submit(),
+          ),
+          const SizedBox(height: 14),
+          _TotalRow(total: total),
           const SizedBox(height: 22),
           SizedBox(
             width: double.infinity,
@@ -214,5 +177,94 @@ class _BidAmountSheetState extends State<_BidAmountSheet> {
         ],
       ),
     );
+  }
+}
+
+class _AmountField extends StatelessWidget {
+  const _AmountField({
+    required this.label,
+    required this.controller,
+    this.autofocus = false,
+    this.errorText,
+    this.onSubmitted,
+  });
+
+  final String label;
+  final TextEditingController controller;
+  final bool autofocus;
+  final String? errorText;
+  final ValueChanged<String>? onSubmitted;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      autofocus: autofocus,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [
+        FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+      ],
+      textInputAction: TextInputAction.done,
+      onSubmitted: onSubmitted,
+      style: AppTypography.titleLarge,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixText: 'PKR  ',
+        errorText: errorText,
+        filled: true,
+        fillColor: AppColors.surface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide:
+              const BorderSide(color: AppColors.primary, width: 2),
+        ),
+      ),
+    );
+  }
+}
+
+class _TotalRow extends StatelessWidget {
+  const _TotalRow({required this.total});
+  final num total;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Text('Total', style: AppTypography.bodyMedium),
+          const Spacer(),
+          Text(
+            'PKR ${_format(total)}',
+            style: AppTypography.titleLarge,
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _format(num n) {
+    final i = n.toInt();
+    final s = i.toString();
+    final buf = StringBuffer();
+    for (var idx = 0; idx < s.length; idx++) {
+      if (idx > 0 && (s.length - idx) % 3 == 0) buf.write(',');
+      buf.write(s[idx]);
+    }
+    return buf.toString();
   }
 }

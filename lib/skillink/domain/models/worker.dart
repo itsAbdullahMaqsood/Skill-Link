@@ -28,10 +28,10 @@ abstract class Worker with _$Worker {
     String? role,
     String? accountStatus,
     String? experienceNote,
+    String? location,
   }) = _Worker;
 
-  factory Worker.fromJson(Map<String, dynamic> json) =>
-      _$WorkerFromJson(json);
+  factory Worker.fromJson(Map<String, dynamic> json) => _$WorkerFromJson(json);
 
   factory Worker.fromAppUser(
     AppUser user, {
@@ -49,6 +49,7 @@ abstract class Worker with _$Worker {
     String? role,
     String? accountStatus,
     String? experienceNote,
+    String? location,
   }) {
     return Worker(
       id: user.id,
@@ -70,6 +71,7 @@ abstract class Worker with _$Worker {
       role: role,
       accountStatus: accountStatus,
       experienceNote: experienceNote,
+      location: location,
     );
   }
 }

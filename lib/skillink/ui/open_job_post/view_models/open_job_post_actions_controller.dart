@@ -74,7 +74,7 @@ class OpenJobPostActionsController
 
   Future<SubmitBidOutcome> submitBid({
     required num amount,
-    required String currency,
+    required num visitingFee,
     String? note,
 
     /// When non-null, persists a recent-bid row for the worker home screen.
@@ -90,7 +90,7 @@ class OpenJobPostActionsController
     final result = await _repo.submitOpenJobPostBid(
       id: postId,
       amount: amount,
-      currency: currency,
+      visitingFee: visitingFee,
       note: note,
     );
     if (!mounted) {
@@ -108,6 +108,7 @@ class OpenJobPostActionsController
               postId: postId,
               description: recentBidDescriptionPreview,
               amount: bid.amount,
+              visitingFee: bid.visitingFee,
               currency: bid.currency,
               status: bid.status,
             );

@@ -19,6 +19,7 @@ class OpenJobPostState {
     this.timeSlot,
     this.serviceAddress = '',
     this.paymentMethod = ServiceRequestPaymentMethod.cash,
+    this.expectedAmount,
     this.isSubmitting = false,
     this.errorMessage,
     this.createdPost,
@@ -32,13 +33,16 @@ class OpenJobPostState {
   final String? timeSlot;
   final String serviceAddress;
   final ServiceRequestPaymentMethod paymentMethod;
+  final num? expectedAmount;
   final bool isSubmitting;
   final String? errorMessage;
   final OpenJobPost? createdPost;
 
   bool get isStep1Valid => description.trim().length >= 10;
   bool get isStep2Valid => scheduledDate != null && timeSlot != null;
-  bool get isStep3Valid => serviceAddress.trim().length >= 4;
+  bool get isStep3Valid =>
+      serviceAddress.trim().length >= 4 &&
+      (expectedAmount != null && expectedAmount! > 0);
 
   OpenJobPostState copyWith({
     int? currentStep,
@@ -48,6 +52,8 @@ class OpenJobPostState {
     String? timeSlot,
     String? serviceAddress,
     ServiceRequestPaymentMethod? paymentMethod,
+    num? expectedAmount,
+    bool clearExpectedAmount = false,
     bool? isSubmitting,
     String? errorMessage,
     OpenJobPost? createdPost,
@@ -61,6 +67,9 @@ class OpenJobPostState {
       timeSlot: timeSlot ?? this.timeSlot,
       serviceAddress: serviceAddress ?? this.serviceAddress,
       paymentMethod: paymentMethod ?? this.paymentMethod,
+      expectedAmount: clearExpectedAmount
+          ? null
+          : (expectedAmount ?? this.expectedAmount),
       isSubmitting: isSubmitting ?? this.isSubmitting,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       createdPost: createdPost ?? this.createdPost,
@@ -156,6 +165,14 @@ class OpenJobPostViewModel extends StateNotifier<OpenJobPostState> {
   void setPaymentMethod(ServiceRequestPaymentMethod m) =>
       state = state.copyWith(paymentMethod: m, clearError: true);
 
+  void setExpectedAmount(num? amount) {
+    if (amount == null) {
+      state = state.copyWith(clearExpectedAmount: true, clearError: true);
+    } else {
+      state = state.copyWith(expectedAmount: amount, clearError: true);
+    }
+  }
+
 
   Future<OpenJobPostOutcome> submit() async {
     if (!state.isStep1Valid || !state.isStep2Valid || !state.isStep3Valid) {
@@ -180,6 +197,7 @@ class OpenJobPostViewModel extends StateNotifier<OpenJobPostState> {
         timeSlotEnd: slot.end,
         serviceAddress: state.serviceAddress.trim(),
         paymentMethod: state.paymentMethod,
+        expectedAmount: state.expectedAmount!,
         localPhotoPaths: state.localPhotoPaths,
       ),
     );

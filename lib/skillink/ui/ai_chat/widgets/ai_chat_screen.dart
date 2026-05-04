@@ -3,6 +3,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:skilllink/skillink/domain/models/ai_message.dart';
+import 'package:skilllink/skillink/domain/models/worker.dart';
 import 'package:skilllink/skillink/routing/routes.dart';
 import 'package:skilllink/skillink/ui/ai_chat/view_models/ai_chat_view_model.dart';
 import 'package:skilllink/skillink/ui/ai_chat/widgets/recommended_worker_card.dart';
@@ -222,25 +223,32 @@ class _MessageList extends ConsumerWidget {
         );
       }
 
-      if (msg.role == AiMessageRole.ai && msg.recommendedWorker != null) {
+      final workersToShow = msg.role == AiMessageRole.ai
+          ? (msg.recommendedWorkers.isNotEmpty
+              ? msg.recommendedWorkers
+              : (msg.recommendedWorker != null
+                  ? <Worker>[msg.recommendedWorker!]
+                  : const <Worker>[]))
+          : const <Worker>[];
+
+      for (final worker in workersToShow) {
         items.add(
           Align(
             alignment: Alignment.centerLeft,
             child: RecommendedWorkerCard(
-              worker: msg.recommendedWorker!,
+              worker: worker,
               tradeLabel: msg.suggestedTrade,
               reasonBlurb: reasonBlurbs[msg.id],
               onViewProfile: () =>
-                  context.push(Routes.workerProfile(msg.recommendedWorker!.id)),
-              onBookNow: () =>
-                  context.push(Routes.booking(msg.recommendedWorker!.id)),
+                  context.push(Routes.workerProfile(worker.id)),
+              onBookNow: () => context.push(Routes.booking(worker.id)),
             ),
           ),
         );
       }
 
       if (msg.role == AiMessageRole.ai &&
-          msg.recommendedWorker == null &&
+          workersToShow.isEmpty &&
           msg.suggestedTrade != null) {
         items.add(
           Align(

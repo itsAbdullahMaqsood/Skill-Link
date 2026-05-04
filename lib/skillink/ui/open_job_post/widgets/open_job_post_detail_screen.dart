@@ -1,9 +1,12 @@
 import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:skilllink/skillink/config/app_constants.dart';
 import 'package:skilllink/skillink/data/providers.dart';
 import 'package:skilllink/skillink/domain/models/open_job_post.dart';
@@ -20,7 +23,9 @@ import 'package:skilllink/skillink/ui/chat/chat_entry.dart';
 import 'package:skilllink/skillink/ui/marketplace/view_models/worker_profile_view_model.dart';
 import 'package:skilllink/skillink/ui/open_job_post/view_models/open_job_post_actions_controller.dart';
 import 'package:skilllink/skillink/ui/open_job_post/widgets/open_job_post_bid_sheet.dart';
+import 'package:skilllink/skillink/ui/core/ui/eta_badge.dart';
 import 'package:skilllink/skillink/utils/avatar_url_image.dart';
+import 'package:skilllink/skillink/utils/currency_format.dart';
 
 const Duration _kPollInterval = Duration(seconds: 10);
 
@@ -67,16 +72,19 @@ class _OpenJobPostDetailScreenState
   }
 
   void _startPolling() {
-    _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(_kPollInterval, (_) {
-      if (!mounted) return;
-      final busy = ref
-          .read(openJobPostActionsControllerProvider(widget.postId))
-          .isBusy;
-      if (busy) return;
-      ref.invalidate(openJobPostByIdProvider(widget.postId));
-      ref.invalidate(openJobPostBidsProvider(widget.postId));
-    });
+    // _pollTimer?.cancel();
+    // _pollTimer = Timer.periodic(_kPollInterval, (_) {
+    //   if (!mounted) return;
+    //   final busy = ref
+    //       .read(openJobPostActionsControllerProvider(widget.postId))
+    //       .isBusy;
+    //   if (busy) return;
+    //   ref.invalidate(openJobPostByIdProvider(widget.postId));
+    //   ref.invalidate(openJobPostBidsProvider(widget.postId));
+    // });
+    // TODO(perf): re-enable once infinite-loop fixes are verified stable.
+    // Pull-to-refresh still works. Automatic polling disabled to avoid
+    // unnecessary /open-job-posts/{id} + /bids calls every 10 s.
   }
 
   void _stopPolling() {
@@ -89,8 +97,9 @@ class _OpenJobPostDetailScreenState
     final postAsync = ref.watch(openJobPostByIdProvider(widget.postId));
     final bidsAsync = ref.watch(openJobPostBidsProvider(widget.postId));
     final viewerId = ref.watch(authViewModelProvider).user?.id;
-    final actionsState =
-        ref.watch(openJobPostActionsControllerProvider(widget.postId));
+    final actionsState = ref.watch(
+      openJobPostActionsControllerProvider(widget.postId),
+    );
 
     ref.listen<OpenJobPostActionsState>(
       openJobPostActionsControllerProvider(widget.postId),
@@ -115,9 +124,7 @@ class _OpenJobPostDetailScreenState
         onRefresh: () async {
           ref.invalidate(openJobPostBidsProvider(widget.postId));
           ref.invalidate(openJobPostByIdProvider(widget.postId));
-          await ref.read(
-            openJobPostByIdProvider(widget.postId).future,
-          );
+          await ref.read(openJobPostByIdProvider(widget.postId).future);
         },
         child: postAsync.when(
           data: (post) => _DetailBody(
@@ -144,7 +151,6 @@ class _OpenJobPostDetailScreenState
   }
 }
 
-
 class _DetailBody extends ConsumerWidget {
   const _DetailBody({
     required this.post,
@@ -162,8 +168,7 @@ class _DetailBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isAuthor =
-        viewerId != null && viewerId == post.requestingUserId;
+    final isAuthor = viewerId != null && viewerId == post.requestingUserId;
     final canBid = post.status == OpenJobPostStatus.openForBids;
 
     return ListView(
@@ -171,6 +176,8 @@ class _DetailBody extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
       children: [
         _HeaderCard(post: post),
+        const SizedBox(height: 12),
+        _ExpectedAmountCard(post: post, isAuthor: isAuthor),
         if (post.status == OpenJobPostStatus.cancelled) ...[
           const SizedBox(height: 12),
           _CancelledBanner(cancelledAt: post.updatedAt),
@@ -207,8 +214,7 @@ class _DetailBody extends ConsumerWidget {
         _InfoRow(
           icon: Icons.access_time_rounded,
           label: 'Time slot',
-          value:
-              '${post.timeSlot.startTime} – ${post.timeSlot.endTime}',
+          value: '${post.timeSlot.startTime} – ${post.timeSlot.endTime}',
         ),
         _InfoRow(
           icon: Icons.location_on_outlined,
@@ -222,6 +228,12 @@ class _DetailBody extends ConsumerWidget {
               ? 'Cash on completion'
               : 'In-app payment',
         ),
+        if (!isAuthor && post.serviceAddress.trim().isNotEmpty) ...[
+          const SizedBox(height: 20),
+          _SectionLabel('Job location'),
+          const SizedBox(height: 8),
+          _HomeownerLocationMap(address: post.serviceAddress),
+        ],
         const SizedBox(height: 20),
         _SectionLabel(isAuthor ? 'Bids' : 'Your bid'),
         const SizedBox(height: 8),
@@ -239,11 +251,29 @@ class _DetailBody extends ConsumerWidget {
             padding: EdgeInsets.symmetric(vertical: 24),
             child: Center(child: CircularProgressIndicator()),
           ),
-          error: (e, _) => Text(
-            'Could not load bids: $e',
-            style:
-                AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
-          ),
+          error: (e, _) {
+            // Backend returns an error like "you have no bids on this post"
+            // when a non-author worker hasn't bid yet. Treat that as the
+            // empty state so the worker can place a bid instead of seeing
+            // a confusing error message.
+            if (!isAuthor) {
+              return _BidList(
+                post: post,
+                bids: const <OpenJobPostBid>[],
+                viewerId: viewerId,
+                isAuthor: false,
+                canBid: canBid,
+                isBusy: isBusy,
+                runningAction: runningAction,
+              );
+            }
+            return Text(
+              'Could not load bids: $e',
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textMuted,
+              ),
+            );
+          },
         ),
         const SizedBox(height: 24),
         if (isAuthor && canBid)
@@ -252,7 +282,6 @@ class _DetailBody extends ConsumerWidget {
     );
   }
 }
-
 
 class _HeaderCard extends StatelessWidget {
   const _HeaderCard({required this.post});
@@ -273,13 +302,8 @@ class _HeaderCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Open Job Post', style: AppTypography.titleLarge),
+                Text('Job status:', style: AppTypography.titleLarge),
                 const SizedBox(height: 4),
-                Text(
-                  '#${_shortId(post.id)}',
-                  style: AppTypography.bodySmall
-                      .copyWith(color: AppColors.textMuted),
-                ),
               ],
             ),
           ),
@@ -289,8 +313,188 @@ class _HeaderCard extends StatelessWidget {
     );
   }
 
-  static String _shortId(String id) =>
-      id.length <= 8 ? id : id.substring(0, 8);
+  static String _shortId(String id) => id.length <= 8 ? id : id.substring(0, 8);
+}
+
+class _ExpectedAmountCard extends ConsumerWidget {
+  const _ExpectedAmountCard({required this.post, required this.isAuthor});
+  final OpenJobPost post;
+  final bool isAuthor;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final canEdit = isAuthor && post.status == OpenJobPostStatus.openForBids;
+    final amt = post.expectedAmount;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.attach_money_rounded,
+            color: AppColors.primary,
+            size: 22,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isAuthor ? 'Your expected amount' : 'Homeowner expects',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textMuted,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  amt == null || amt == 0 ? '—' : formatPkr(amt),
+                  style: AppTypography.titleLarge,
+                ),
+              ],
+            ),
+          ),
+          if (canEdit)
+            IconButton(
+              tooltip: 'Edit expected amount',
+              icon: const Icon(Icons.edit_outlined),
+              color: AppColors.primary,
+              onPressed: () => _showEditSheet(context, ref, post),
+            ),
+        ],
+      ),
+    );
+  }
+
+  static Future<void> _showEditSheet(
+    BuildContext context,
+    WidgetRef ref,
+    OpenJobPost post,
+  ) async {
+    final ctrl = TextEditingController(
+      text: post.expectedAmount == null
+          ? ''
+          : post.expectedAmount!.toInt().toString(),
+    );
+    String? error;
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.background,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        bool busy = false;
+        return StatefulBuilder(
+          builder: (ctx, setSt) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                14,
+                20,
+                20 + MediaQuery.viewInsetsOf(ctx).bottom,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 42,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.border,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'Update expected amount',
+                    style: AppTypography.headlineMedium,
+                  ),
+                  const SizedBox(height: 18),
+                  TextField(
+                    controller: ctrl,
+                    autofocus: true,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: false,
+                    ),
+                    style: AppTypography.titleLarge,
+                    decoration: InputDecoration(
+                      labelText: 'Expected amount',
+                      prefixText: 'PKR  ',
+                      errorText: error,
+                      filled: true,
+                      fillColor: AppColors.surface,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: AppColors.primary,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  PrimaryButton(
+                    label: 'Save',
+                    isLoading: busy,
+                    onPressed: busy
+                        ? null
+                        : () async {
+                            final parsed = num.tryParse(ctrl.text.trim());
+                            if (parsed == null || parsed <= 0) {
+                              setSt(() => error = 'Enter a positive amount');
+                              return;
+                            }
+                            setSt(() {
+                              busy = true;
+                              error = null;
+                            });
+                            final repo = ref.read(
+                              openJobPostRepositoryProvider,
+                            );
+                            final res = await repo.updateExpectedAmount(
+                              postId: post.id,
+                              amount: parsed,
+                            );
+                            if (!ctx.mounted) return;
+                            res.when(
+                              success: (_) => Navigator.of(ctx).pop(true),
+                              failure: (msg, _) {
+                                setSt(() {
+                                  busy = false;
+                                  error = msg;
+                                });
+                              },
+                            );
+                          },
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (saved == true) {
+      ref.invalidate(openJobPostByIdProvider(post.id));
+    }
+  }
 }
 
 class _StatusChip extends StatelessWidget {
@@ -301,23 +505,21 @@ class _StatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final (bg, fg) = switch (status) {
       OpenJobPostStatus.openForBids => (
-          AppColors.primary.withValues(alpha: 0.14),
-          AppColors.primary,
-        ),
-      OpenJobPostStatus.workerSelected ||
-      OpenJobPostStatus.awarded =>
-        (
-          AppColors.success.withValues(alpha: 0.14),
-          AppColors.success,
-        ),
-      OpenJobPostStatus.cancelled =>
-        (AppColors.danger.withValues(alpha: 0.14), AppColors.danger),
-      OpenJobPostStatus.closed ||
-      OpenJobPostStatus.unknown =>
-        (
-          AppColors.border.withValues(alpha: 0.4),
-          AppColors.textMuted,
-        ),
+        AppColors.primary.withValues(alpha: 0.14),
+        AppColors.primary,
+      ),
+      OpenJobPostStatus.workerSelected || OpenJobPostStatus.awarded => (
+        AppColors.success.withValues(alpha: 0.14),
+        AppColors.success,
+      ),
+      OpenJobPostStatus.cancelled => (
+        AppColors.danger.withValues(alpha: 0.14),
+        AppColors.danger,
+      ),
+      OpenJobPostStatus.closed || OpenJobPostStatus.unknown => (
+        AppColors.border.withValues(alpha: 0.4),
+        AppColors.textMuted,
+      ),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -349,8 +551,7 @@ class _CancelledBanner extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.cancel_outlined,
-              size: 20, color: AppColors.danger),
+          const Icon(Icons.cancel_outlined, size: 20, color: AppColors.danger),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -358,15 +559,18 @@ class _CancelledBanner extends StatelessWidget {
               children: [
                 Text(
                   'This post was cancelled',
-                  style: AppTypography.titleLarge
-                      .copyWith(color: AppColors.danger, fontSize: 14),
+                  style: AppTypography.titleLarge.copyWith(
+                    color: AppColors.danger,
+                    fontSize: 14,
+                  ),
                 ),
                 if (cancelledAt != null) ...[
                   const SizedBox(height: 2),
                   Text(
                     'on ${_fmt(cancelledAt!)}',
-                    style: AppTypography.bodySmall
-                        .copyWith(color: AppColors.textMuted),
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textMuted,
+                    ),
                   ),
                 ],
               ],
@@ -401,14 +605,19 @@ class _AwardedBanner extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.check_circle_outline,
-                  size: 20, color: AppColors.success),
+              const Icon(
+                Icons.check_circle_outline,
+                size: 20,
+                color: AppColors.success,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   'A worker has been selected for this post',
-                  style: AppTypography.titleLarge
-                      .copyWith(color: AppColors.success, fontSize: 14),
+                  style: AppTypography.titleLarge.copyWith(
+                    color: AppColors.success,
+                    fontSize: 14,
+                  ),
                 ),
               ),
             ],
@@ -418,8 +627,7 @@ class _AwardedBanner extends StatelessWidget {
             SecondaryButton(
               label: viewerIsAuthor ? 'Open service request' : 'Open job',
               icon: Icons.arrow_forward_rounded,
-              onPressed: () =>
-                  context.push(Routes.sentRequestDetail(srId)),
+              onPressed: () => context.push(Routes.sentRequestDetail(srId)),
             ),
           ],
         ],
@@ -428,17 +636,15 @@ class _AwardedBanner extends StatelessWidget {
   }
 }
 
-
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel(this.label);
   final String label;
 
   @override
   Widget build(BuildContext context) => Text(
-        label,
-        style: AppTypography.labelMedium
-            .copyWith(color: AppColors.textMuted),
-      );
+    label,
+    style: AppTypography.labelMedium.copyWith(color: AppColors.textMuted),
+  );
 }
 
 class _InfoRow extends StatelessWidget {
@@ -465,8 +671,9 @@ class _InfoRow extends StatelessWidget {
             width: 78,
             child: Text(
               label,
-              style: AppTypography.bodySmall
-                  .copyWith(color: AppColors.textMuted),
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textMuted,
+              ),
             ),
           ),
           Expanded(
@@ -480,7 +687,6 @@ class _InfoRow extends StatelessWidget {
     );
   }
 }
-
 
 class _PhotosStrip extends StatelessWidget {
   const _PhotosStrip({required this.paths});
@@ -509,8 +715,10 @@ class _PhotosStrip extends StatelessWidget {
                 width: 96,
                 height: 96,
                 color: AppColors.border,
-                child: const Icon(Icons.broken_image_outlined,
-                    color: AppColors.textMuted),
+                child: const Icon(
+                  Icons.broken_image_outlined,
+                  color: AppColors.textMuted,
+                ),
               ),
             ),
           );
@@ -522,13 +730,13 @@ class _PhotosStrip extends StatelessWidget {
   static String _resolve(String path) {
     if (path.startsWith('http://') || path.startsWith('https://')) return path;
     final base = AppConstants.apiBaseUrl;
-    final trimmedBase =
-        base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+    final trimmedBase = base.endsWith('/')
+        ? base.substring(0, base.length - 1)
+        : base;
     final suffix = path.startsWith('/') ? path : '/$path';
     return '$trimmedBase$suffix';
   }
 }
-
 
 class _BidList extends ConsumerWidget {
   const _BidList({
@@ -566,7 +774,7 @@ class _BidList extends ConsumerWidget {
               : 'No bids were placed before the post closed.',
           subtitle: canBid
               ? 'Workers in your area are being notified. '
-                  'Bids usually arrive within a few hours.'
+                    'Bids usually arrive within a few hours.'
               : '',
         );
       }
@@ -579,7 +787,7 @@ class _BidList extends ConsumerWidget {
                 : "You didn't place a bid on this post",
             subtitle: canBid
                 ? 'Submit your quote below. The homeowner can accept any '
-                    'pending bid at any time.'
+                      'pending bid at any time.'
                 : '',
           ),
           if (canBid) ...[
@@ -590,16 +798,14 @@ class _BidList extends ConsumerWidget {
               isLoading: runningAction == OpenJobPostActionKind.submitBid,
               onPressed: isBusy
                   ? null
-                  : () =>
-                      OpenJobPostBidSheet.show(context, post: post),
+                  : () => OpenJobPostBidSheet.show(context, post: post),
             ),
           ],
         ],
       );
     }
 
-    final showPlaceBidCta =
-        !isAuthor && canBid && !_viewerHasBid();
+    final showPlaceBidCta = !isAuthor && canBid && !_viewerHasBid();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -655,9 +861,7 @@ class _BidTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isOwnBid =
-        viewerId != null &&
-        viewerId!.isNotEmpty &&
-        bid.workerId == viewerId;
+        viewerId != null && viewerId!.isNotEmpty && bid.workerId == viewerId;
     final isAcceptedBid =
         post.awardedBidId != null && post.awardedBidId == bid.id;
     final tile = Container(
@@ -683,22 +887,34 @@ class _BidTile extends ConsumerWidget {
             children: [
               Expanded(
                 child: Text(
-                  '${bid.currency} ${bid.amount}',
+                  formatPkr(bid.amount + bid.visitingFee),
                   style: AppTypography.titleLarge,
                 ),
               ),
               _BidStatusChip(status: bid.status),
             ],
           ),
-          if (bid.note.trim().isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(
+            '${formatPkr(bid.amount)} labour + ${formatPkr(bid.visitingFee)} visit',
+            style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+          ),
+          if (isAuthor) ...[
+            const SizedBox(height: 6),
+            EtaBadge(
+              workerId: bid.workerId,
+              serviceAddress: post.serviceAddress,
+              prefix: 'ETA',
+            ),
+          ],
+          if (bid.note != null && bid.note!.trim().isNotEmpty) ...[
             const SizedBox(height: 4),
-            Text(bid.note, style: AppTypography.bodyMedium),
+            Text(bid.note!, style: AppTypography.bodyMedium),
           ],
           const SizedBox(height: 4),
           Text(
             'Submitted ${_formatWhen(bid.createdAt)}',
-            style: AppTypography.bodySmall
-                .copyWith(color: AppColors.textMuted),
+            style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
           ),
           if (isAuthor &&
               canAct &&
@@ -708,9 +924,7 @@ class _BidTile extends ConsumerWidget {
               label: 'Accept this bid',
               icon: Icons.check_rounded,
               isLoading: runningAction == OpenJobPostActionKind.selectBid,
-              onPressed: isBusy
-                  ? null
-                  : () => _confirmSelect(context, ref),
+              onPressed: isBusy ? null : () => _confirmSelect(context, ref),
             ),
           ],
           if (!isAuthor &&
@@ -724,10 +938,10 @@ class _BidTile extends ConsumerWidget {
               onPressed: isBusy
                   ? null
                   : () => OpenJobPostBidSheet.show(
-                        context,
-                        post: post,
-                        existingBid: bid,
-                      ),
+                      context,
+                      post: post,
+                      existingBid: bid,
+                    ),
             ),
           ],
         ],
@@ -743,7 +957,7 @@ class _BidTile extends ConsumerWidget {
         title: const Text('Select this bid?'),
         content: Text(
           "This will close your post to further bidding and create a "
-          "service request with this worker for ${bid.currency} ${bid.amount}. "
+          "service request with this worker for ${formatPkr(bid.amount + bid.visitingFee)}. "
           "Other pending bids will be automatically rejected.",
         ),
         actions: [
@@ -761,17 +975,16 @@ class _BidTile extends ConsumerWidget {
     if (confirm != true) return;
     if (!context.mounted) return;
 
-    final controller =
-        ref.read(openJobPostActionsControllerProvider(post.id).notifier);
+    final controller = ref.read(
+      openJobPostActionsControllerProvider(post.id).notifier,
+    );
     final outcome = await controller.selectBid(bidId: bid.id);
     if (!context.mounted) return;
     if (!outcome.isSuccess) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text(
-          'Bid accepted. A service request has been created.',
-        ),
+        content: Text('Bid accepted. A service request has been created.'),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -813,8 +1026,10 @@ class _BidderHeader extends ConsumerWidget {
             children: [
               Text(
                 name,
-                style: AppTypography.titleLarge
-                    .copyWith(fontSize: 15, fontWeight: FontWeight.w700),
+                style: AppTypography.titleLarge.copyWith(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -841,9 +1056,8 @@ class _BidderHeader extends ConsumerWidget {
         IconButton(
           tooltip: 'View profile',
           icon: const Icon(Icons.open_in_new_rounded, size: 18),
-          onPressed: () => context.push(
-            Routes.workerProfile(workerId, hideBook: true),
-          ),
+          onPressed: () =>
+              context.push(Routes.workerProfile(workerId, hideBook: true)),
           style: IconButton.styleFrom(
             foregroundColor: AppColors.textPrimary,
             backgroundColor: AppColors.border.withValues(alpha: 0.25),
@@ -857,11 +1071,7 @@ class _BidderHeader extends ConsumerWidget {
             icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
             onPressed: worker == null
                 ? null
-                : () => ChatEntry.openWithWorker(
-                      context,
-                      ref,
-                      worker: worker,
-                    ),
+                : () => ChatEntry.openWithWorker(context, ref, worker: worker),
             style: IconButton.styleFrom(
               foregroundColor: Colors.white,
               backgroundColor: AppColors.primary,
@@ -882,23 +1092,21 @@ class _BidStatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final (bg, fg) = switch (status) {
       OpenJobPostBidStatus.pending => (
-          AppColors.primary.withValues(alpha: 0.12),
-          AppColors.primary,
-        ),
+        AppColors.primary.withValues(alpha: 0.12),
+        AppColors.primary,
+      ),
       OpenJobPostBidStatus.accepted => (
-          AppColors.success.withValues(alpha: 0.14),
-          AppColors.success,
-        ),
+        AppColors.success.withValues(alpha: 0.14),
+        AppColors.success,
+      ),
       OpenJobPostBidStatus.rejected => (
-          AppColors.danger.withValues(alpha: 0.12),
-          AppColors.danger,
-        ),
-      OpenJobPostBidStatus.withdrawn ||
-      OpenJobPostBidStatus.unknown =>
-        (
-          AppColors.border.withValues(alpha: 0.4),
-          AppColors.textMuted,
-        ),
+        AppColors.danger.withValues(alpha: 0.12),
+        AppColors.danger,
+      ),
+      OpenJobPostBidStatus.withdrawn || OpenJobPostBidStatus.unknown => (
+        AppColors.border.withValues(alpha: 0.4),
+        AppColors.textMuted,
+      ),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -939,16 +1147,19 @@ class _EmptyHint extends StatelessWidget {
         children: [
           Icon(icon, size: 28, color: AppColors.textMuted),
           const SizedBox(height: 8),
-          Text(title,
-              textAlign: TextAlign.center,
-              style: AppTypography.titleLarge.copyWith(fontSize: 14)),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: AppTypography.titleLarge.copyWith(fontSize: 14),
+          ),
           if (subtitle.isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(
               subtitle,
               textAlign: TextAlign.center,
-              style: AppTypography.bodySmall
-                  .copyWith(color: AppColors.textMuted),
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textMuted,
+              ),
             ),
           ],
         ],
@@ -991,9 +1202,7 @@ class _CancelPostButton extends ConsumerWidget {
               if (confirm != true) return;
               if (!context.mounted) return;
               final ok = await ref
-                  .read(
-                    openJobPostActionsControllerProvider(postId).notifier,
-                  )
+                  .read(openJobPostActionsControllerProvider(postId).notifier)
                   .cancelPost();
               if (!context.mounted || !ok) return;
               ScaffoldMessenger.of(context).showSnackBar(
@@ -1008,6 +1217,169 @@ class _CancelPostButton extends ConsumerWidget {
         'Cancel this post',
         style: TextStyle(color: AppColors.danger),
       ),
+    );
+  }
+}
+
+class _HomeownerLocationMap extends ConsumerStatefulWidget {
+  const _HomeownerLocationMap({required this.address});
+
+  final String address;
+
+  @override
+  ConsumerState<_HomeownerLocationMap> createState() =>
+      _HomeownerLocationMapState();
+}
+
+class _HomeownerLocationMapState extends ConsumerState<_HomeownerLocationMap> {
+  GoogleMapController? _map;
+  LatLng? _location;
+  bool _resolving = true;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolve();
+  }
+
+  @override
+  void didUpdateWidget(covariant _HomeownerLocationMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.address.trim() != widget.address.trim()) {
+      _resolve();
+    }
+  }
+
+  @override
+  void dispose() {
+    _map?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _resolve() async {
+    setState(() {
+      _resolving = true;
+      _failed = false;
+    });
+    final geo = ref.read(geocodingCacheProvider);
+    final coords = await geo.resolve(widget.address);
+    if (!mounted) return;
+    setState(() {
+      _resolving = false;
+      if (coords == null) {
+        _failed = true;
+      } else {
+        _location = LatLng(coords.lat, coords.lng);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_resolving) {
+      return Container(
+        height: 180,
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        alignment: Alignment.center,
+        child: const SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+
+    if (_failed || _location == null) {
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.location_off_outlined,
+              size: 18,
+              color: AppColors.textMuted,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Could not resolve this address on the map.',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ),
+            TextButton(onPressed: _resolve, child: const Text('Retry')),
+          ],
+        ),
+      );
+    }
+
+    final loc = _location!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: SizedBox(
+            height: 180,
+            child: GoogleMap(
+              initialCameraPosition: CameraPosition(target: loc, zoom: 15),
+              markers: {
+                Marker(
+                  markerId: const MarkerId('homeowner'),
+                  position: loc,
+                  infoWindow: const InfoWindow(title: 'Job location'),
+                ),
+              },
+              myLocationButtonEnabled: false,
+              zoomControlsEnabled: false,
+              compassEnabled: false,
+              mapToolbarEnabled: false,
+              liteModeEnabled: defaultTargetPlatform == TargetPlatform.android,
+              scrollGesturesEnabled: false,
+              zoomGesturesEnabled: false,
+              rotateGesturesEnabled: false,
+              tiltGesturesEnabled: false,
+              gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
+                Factory<OneSequenceGestureRecognizer>(
+                  () => EagerGestureRecognizer(),
+                ),
+              },
+              onMapCreated: (c) => _map = c,
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(
+              Icons.location_on_outlined,
+              size: 16,
+              color: AppColors.primary,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                widget.address,
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

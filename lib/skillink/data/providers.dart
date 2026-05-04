@@ -22,22 +22,30 @@ import 'package:skilllink/skillink/data/repositories/remote_anomaly_repository.d
 import 'package:skilllink/skillink/data/repositories/remote_iot_repository.dart';
 import 'package:skilllink/skillink/data/repositories/remote_job_repository.dart';
 import 'package:skilllink/skillink/data/repositories/remote_open_job_post_repository.dart';
+import 'package:skilllink/skillink/data/repositories/remote_review_repository.dart';
 import 'package:skilllink/skillink/data/repositories/remote_service_request_repository.dart';
 import 'package:skilllink/skillink/data/repositories/remote_worker_repository.dart';
+import 'package:skilllink/skillink/data/repositories/review_repository.dart';
 import 'package:skilllink/skillink/data/repositories/service_request_repository.dart';
 import 'package:skilllink/skillink/domain/models/open_job_post.dart';
 import 'package:skilllink/skillink/domain/models/open_job_post_bid.dart';
+import 'package:skilllink/skillink/domain/models/reviews_summary.dart';
 import 'package:skilllink/skillink/domain/models/service_request.dart';
+import 'package:skilllink/skillink/domain/models/user_role.dart';
 import 'package:skilllink/skillink/data/repositories/skillchain_auth_repository.dart';
 import 'package:skilllink/skillink/data/repositories/socketio_chat_repository.dart';
 import 'package:skilllink/skillink/data/repositories/worker_repository.dart';
 import 'package:skilllink/skillink/data/services/api_service.dart';
+import 'package:skilllink/skillink/data/services/eta_service.dart';
+import 'package:skilllink/skillink/data/services/geocoding_cache.dart';
 import 'package:skilllink/skillink/data/services/recent_worker_open_bid_storage.dart';
 import 'package:skilllink/skillink/data/services/fcm_service.dart';
 import 'package:skilllink/skillink/data/services/firebase_rtdb_live_service.dart';
 import 'package:skilllink/skillink/data/services/local_notifications_service.dart';
 import 'package:skilllink/skillink/data/services/maps_distance_service.dart';
 import 'package:skilllink/skillink/data/services/media_upload_service.dart';
+import 'package:skilllink/skillink/data/services/worker_live_location_service.dart';
+import 'package:skilllink/skillink/data/services/worker_location_publisher.dart';
 import 'package:skilllink/skillink/testing/fakes/fake_ai_repository.dart';
 import 'package:skilllink/skillink/testing/fakes/fake_anomaly_repository.dart';
 import 'package:skilllink/skillink/testing/fakes/fake_auth_repository.dart';
@@ -196,14 +204,93 @@ final serviceRequestRepositoryProvider =
   );
 });
 
+final reviewRepositoryProvider = Provider<ReviewRepository>((ref) {
+  return RemoteReviewRepository(apiService: ref.watch(apiServiceProvider));
+});
+
+/// Labour-side reviews + aggregate rating for the signed-in homeowner (drawer / profile).
+final homeownerReviewsSummaryProvider =
+    FutureProvider.autoDispose<ReviewsSummary?>((ref) async {
+  final user = ref.watch(authViewModelProvider).user;
+  if (user == null || user.role != UserRole.homeowner) return null;
+  final repo = ref.watch(reviewRepositoryProvider);
+  final res = await repo.getUserReviews(user.id);
+  return res.when(
+    success: (s) => s,
+    failure: (_, _) => null,
+  );
+});
+
+final geocodingCacheProvider = Provider<GeocodingCache>((ref) {
+  return GeocodingCache();
+});
+
+final etaServiceProvider = Provider<EtaService>((ref) {
+  return EtaService(geocoding: ref.watch(geocodingCacheProvider));
+});
+
+final workerLiveLocationServiceProvider =
+    Provider<WorkerLiveLocationService>((ref) {
+  return WorkerLiveLocationService();
+});
+
+final workerLocationPublisherProvider =
+    Provider<WorkerLocationPublisher>((ref) {
+  final pub = WorkerLocationPublisher(
+    service: ref.watch(workerLiveLocationServiceProvider),
+  );
+  ref.onDispose(() => pub.stop());
+  return pub;
+});
+
+/// Streams the latest live location for a worker (RTDB).
+final workerLiveLocationProvider = StreamProvider.autoDispose
+    .family<WorkerLiveLocation?, String>((ref, workerId) {
+  return ref
+      .watch(workerLiveLocationServiceProvider)
+      .watch(workerId);
+});
+
+/// One-shot ETA from worker's registered home address to a service address.
+/// Cached per (workerLocation, serviceAddress) pair.
+final preJobEtaProvider = FutureProvider.autoDispose
+    .family<EtaResult?, ({String workerLocation, String serviceAddress})>(
+        (ref, key) async {
+  final from = key.workerLocation.trim();
+  final to = key.serviceAddress.trim();
+  if (from.isEmpty || to.isEmpty) return null;
+  return ref.watch(etaServiceProvider).betweenAddresses(from, to);
+});
+
+/// ETA from a known worker GPS coordinate (e.g. the last fix from
+/// `/workerLocations/{workerId}` in RTDB) to a service address. Used by
+/// [EtaBadge] when a live fix is available, in preference to the worker's
+/// static profile address. Cached per (lat, lng, serviceAddress).
+final liveCoordinateEtaProvider = FutureProvider.autoDispose.family<EtaResult?,
+    ({double workerLat, double workerLng, String serviceAddress})>(
+  (ref, key) async {
+    final to = key.serviceAddress.trim();
+    if (to.isEmpty) return null;
+    return ref.watch(etaServiceProvider).fromLatLngToAddress(
+          fromLat: key.workerLat,
+          fromLng: key.workerLng,
+          toAddress: to,
+        );
+  },
+);
+
 final openJobPostRepositoryProvider = Provider<OpenJobPostRepository>((ref) {
   return RemoteOpenJobPostRepository(
     apiService: ref.watch(apiServiceProvider),
   );
 });
 
-final myOpenJobPostsProvider = FutureProvider.autoDispose
-    .family<List<OpenJobPost>, ServiceRequestRole>((ref, role) async {
+final myOpenJobPostsProvider =
+    FutureProvider.family<List<OpenJobPost>, ServiceRequestRole>(
+        (ref, role) async {
+  // Not autoDispose — multiple watchers (drawer + dashboard) and listener
+  // churn during widget rebuilds were causing /open-job-posts/my to be
+  // hammered on every blink. Action controllers explicitly invalidate.
   final repo = ref.watch(openJobPostRepositoryProvider);
   final result = await repo.listMyOpenJobPosts(role: role);
   return result.when(
@@ -265,8 +352,12 @@ final openJobPostBidsProvider = FutureProvider.autoDispose
   );
 });
 
-final myServiceRequestsProvider = FutureProvider.autoDispose
-    .family<List<ServiceRequest>, ServiceRequestRole>((ref, role) async {
+final myServiceRequestsProvider =
+    FutureProvider.family<List<ServiceRequest>, ServiceRequestRole>(
+        (ref, role) async {
+  // Not autoDispose — listener churn during widget rebuilds was causing
+  // /request-services/my to be hit on every blink. Action controllers
+  // explicitly `invalidate()` after mutations.
   final repo = ref.watch(serviceRequestRepositoryProvider);
   final result = await repo.listMyRequests(role: role);
   return result.when(

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:skilllink/Widgets/auth_back_scope.dart';
 import 'package:skilllink/Widgets/auth_shell.dart';
 import 'package:skilllink/core/network/api_exception.dart';
-import 'package:skilllink/Pages/signup/signup_otp_page.dart';
+import 'package:skilllink/router/app_router.dart';
 import 'package:skilllink/services/signup_api_service.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_colors.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_typography.dart';
@@ -37,17 +38,8 @@ class _SignupEmailPageState extends State<SignupEmailPage> {
     try {
       await _api.verifyEmail(_emailController.text.trim());
       if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-      });
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => SignupOtpPage(
-            email: _emailController.text.trim(),
-          ),
-        ),
-      );
+      final email = Uri.encodeQueryComponent(_emailController.text.trim());
+      context.go('$signupOtpPath?email=$email');
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {

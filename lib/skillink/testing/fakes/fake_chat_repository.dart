@@ -141,6 +141,13 @@ class FakeChatRepository implements ChatRepository {
   }
 
   @override
+  Future<void> refreshUserChats(String userId) async {
+    _seedIfNeeded(userId);
+    await Future<void>.delayed(_latency);
+    _emitUser(userId);
+  }
+
+  @override
   String? cachedPeerIdForChat(String chatId, String viewerId) {
     _seedIfNeeded(viewerId);
     return _index[viewerId]?[chatId]?.peerId;

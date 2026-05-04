@@ -16,9 +16,11 @@ import 'package:skilllink/skillink/ui/core/themes/app_typography.dart';
 import 'package:skilllink/skillink/ui/core/ui/loading_shimmer.dart';
 import 'package:skilllink/skillink/ui/service_requests/view_models/service_request_actions_controller.dart';
 import 'package:skilllink/skillink/ui/service_requests/widgets/bid_amount_sheet.dart';
+import 'package:skilllink/skillink/ui/service_requests/widgets/live_tracking_map.dart';
 import 'package:skilllink/skillink/ui/service_requests/widgets/negotiation_offer_card.dart';
 import 'package:skilllink/skillink/ui/service_requests/widgets/party_card.dart';
 import 'package:skilllink/skillink/ui/service_requests/widgets/request_location_map.dart';
+import 'package:skilllink/skillink/utils/currency_format.dart';
 
 const Duration _kDetailPollInterval = Duration(seconds: 10);
 
@@ -64,15 +66,15 @@ class _SentRequestDetailScreenState
   }
 
   void _startPolling() {
-    _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(_kDetailPollInterval, (_) {
-      if (!mounted) return;
-      final submitting = ref
-          .read(serviceRequestActionsControllerProvider(widget.requestId))
-          .isSubmitting;
-      if (submitting) return;
-      ref.invalidate(serviceRequestByIdProvider(widget.requestId));
-    });
+    // _pollTimer?.cancel();
+    // _pollTimer = Timer.periodic(_kDetailPollInterval, (_) {
+    //   if (!mounted) return;
+    //   final submitting = ref
+    //       .read(serviceRequestActionsControllerProvider(widget.requestId))
+    //       .isSubmitting;
+    //   if (submitting) return;
+    //   ref.invalidate(serviceRequestByIdProvider(widget.requestId));
+    // });
   }
 
   void _stopPolling() {
@@ -128,9 +130,9 @@ class _SentRequestDetailScreenState
           final offers = req.negotiationOffers;
           final inlineActionsVisible =
               viewer == ServiceRequestViewer.customer &&
-                  offers.isNotEmpty &&
-                  offers.last.actorRole == NegotiationActor.worker &&
-                  req.status == ServiceRequestStatus.bidReceived;
+              offers.isNotEmpty &&
+              offers.last.actorRole == NegotiationActor.worker &&
+              req.status == ServiceRequestStatus.bidReceived;
           if (inlineActionsVisible) {
             actions = {
               for (final a in actions)
@@ -194,6 +196,17 @@ bool _showCustomerCompletionNudge(
   return !ref.watch(acknowledgedCompletionReportsProvider).contains(request.id);
 }
 
+/// Customer-facing live worker map is shown for the entire active window of a
+/// service request — once a bid is accepted, the worker's app auto-publishes
+/// their location (see `workerLiveLocationBindingProvider`) so the homeowner
+/// can watch them right away without waiting for the explicit "On the way"
+/// tap. The map disappears once the worker arrives / completes / cancels.
+bool _showsLiveTracking(ServiceRequest request) {
+  if (request.cancelled) return false;
+  return request.status == ServiceRequestStatus.bidAccepted ||
+      request.status == ServiceRequestStatus.onTheWay;
+}
+
 class _CustomerCompletionNudgeCard extends ConsumerWidget {
   const _CustomerCompletionNudgeCard({required this.requestId});
 
@@ -222,8 +235,9 @@ class _CustomerCompletionNudgeCard extends ConsumerWidget {
               Text(
                 'Optionally report how much you paid. This helps if there is a '
                 'payment dispute later.',
-                style: AppTypography.bodySmall
-                    .copyWith(color: AppColors.textMuted),
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textMuted,
+                ),
               ),
               const SizedBox(height: 12),
               Row(
@@ -265,8 +279,8 @@ class _DetailBody extends ConsumerWidget {
     final counterparty = viewer == ServiceRequestViewer.customer
         ? (request.assignedWorker, PartyCardVariant.worker)
         : viewer == ServiceRequestViewer.worker
-            ? (request.requestingCustomer, PartyCardVariant.customer)
-            : (null, PartyCardVariant.worker);
+        ? (request.requestingCustomer, PartyCardVariant.customer)
+        : (null, PartyCardVariant.worker);
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -283,23 +297,33 @@ class _DetailBody extends ConsumerWidget {
         if (counterparty.$1 != null) ...[
           const SizedBox(height: 16),
           _SectionLabel(
-            counterparty.$2 == PartyCardVariant.worker
-                ? 'Worker'
-                : 'Customer',
+            counterparty.$2 == PartyCardVariant.worker ? 'Worker' : 'Customer',
           ),
           const SizedBox(height: 8),
           PartyCard(party: counterparty.$1!, variant: counterparty.$2),
         ],
-        if (request.serviceAddress.trim().isNotEmpty) ...[
+        if (viewer == ServiceRequestViewer.customer &&
+            _showsLiveTracking(request) &&
+            request.requestedWorkerId.isNotEmpty &&
+            request.serviceAddress.trim().isNotEmpty) ...[
+          const SizedBox(height: 16),
+          _SectionLabel(
+            request.status == ServiceRequestStatus.onTheWay
+                ? 'Worker en route'
+                : 'Worker location',
+          ),
+          const SizedBox(height: 8),
+          LiveTrackingMap(
+            workerId: request.requestedWorkerId,
+            serviceAddress: request.serviceAddress,
+            status: request.status,
+          ),
+        ] else if (request.serviceAddress.trim().isNotEmpty) ...[
           const SizedBox(height: 16),
           _SectionLabel('Location'),
           const SizedBox(height: 8),
-          RequestLocationMap(
-            address: request.serviceAddress,
-            viewer: viewer,
-          ),
+          RequestLocationMap(address: request.serviceAddress, viewer: viewer),
         ],
-        const SizedBox(height: 16),
         _SectionLabel('Description'),
         const SizedBox(height: 6),
         Text(
@@ -332,7 +356,6 @@ class _DetailBody extends ConsumerWidget {
     );
   }
 }
-
 
 class _CancelledBanner extends StatelessWidget {
   const _CancelledBanner({required this.cancelledAt});
@@ -380,7 +403,6 @@ class _CancelledBanner extends StatelessWidget {
     );
   }
 }
-
 
 class _HeaderCard extends StatelessWidget {
   const _HeaderCard({required this.request});
@@ -441,7 +463,6 @@ class _HeaderCard extends StatelessWidget {
     );
   }
 }
-
 
 class _InfoCard extends StatelessWidget {
   const _InfoCard({required this.request});
@@ -560,7 +581,6 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-
 class _PhotosStrip extends StatelessWidget {
   const _PhotosStrip({required this.paths});
 
@@ -612,7 +632,6 @@ class _PhotosStrip extends StatelessWidget {
   }
 }
 
-
 class _NegotiationSection extends ConsumerWidget {
   const _NegotiationSection({required this.request, required this.viewer});
   final ServiceRequest request;
@@ -627,7 +646,8 @@ class _NegotiationSection extends ConsumerWidget {
         .watch(serviceRequestActionsControllerProvider(request.id))
         .isSubmitting;
 
-    final showActionsOnLatest = viewer == ServiceRequestViewer.customer &&
+    final showActionsOnLatest =
+        viewer == ServiceRequestViewer.customer &&
         offers.isNotEmpty &&
         offers.last.actorRole == NegotiationActor.worker &&
         request.status == ServiceRequestStatus.bidReceived &&
@@ -636,7 +656,8 @@ class _NegotiationSection extends ConsumerWidget {
             actions.contains(ServiceRequestAction.cancel));
 
     final showAcceptHintOnLatest =
-        viewer == ServiceRequestViewer.customer && isWorkerAcceptanceEcho(request);
+        viewer == ServiceRequestViewer.customer &&
+        isWorkerAcceptanceEcho(request);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -649,10 +670,8 @@ class _NegotiationSection extends ConsumerWidget {
               ref: ref,
               offer: offers[i],
               isLatest: i == offers.length - 1,
-              showActionsHere:
-                  showActionsOnLatest && i == offers.length - 1,
-              showAcceptHint:
-                  showAcceptHintOnLatest && i == offers.length - 1,
+              showActionsHere: showActionsOnLatest && i == offers.length - 1,
+              showAcceptHint: showAcceptHintOnLatest && i == offers.length - 1,
               submitting: submitting,
             ),
           ),
@@ -705,16 +724,16 @@ class _NegotiationSection extends ConsumerWidget {
   }
 
   Future<void> _onCounter(BuildContext context, WidgetRef ref) async {
-    final seed = request.latestOffer?.amount;
-    final seedCurrency = request.latestOffer?.currency ?? 'PKR';
+    final seedAmount = request.latestOffer?.amount;
+    final seedVisit = request.latestOffer?.visitingFee;
     final bid = await showBidAmountSheet(
       context,
       title: 'Counter offer',
       ctaLabel: 'Send counter',
-      suggestedAmount: seed,
-      defaultCurrency: seedCurrency,
+      suggestedAmount: seedAmount,
+      suggestedVisitingFee: seedVisit,
       helperText:
-          'Propose a new amount. The worker will see this in the negotiation thread.',
+          'Propose new amounts. The worker will see this in the negotiation thread.',
     );
     if (bid == null) return;
     if (!context.mounted) return;
@@ -723,7 +742,7 @@ class _NegotiationSection extends ConsumerWidget {
     );
     final result = await controller.counterOffer(
       amount: bid.amount,
-      currency: bid.currency,
+      visitingFee: bid.visitingFee,
     );
     if (!context.mounted) return;
     _showResult(context, result, successMessage: 'Counter sent.');
@@ -817,10 +836,17 @@ class _AcceptedBidBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Deal accepted at ${accepted.currency} ${_formatAmount(accepted.amount)}',
+                  'Deal accepted at ${formatPkr(accepted.total)}',
                   style: AppTypography.titleLarge.copyWith(
                     color: AppColors.success,
                     fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${formatPkr(accepted.amount)} labour + ${formatPkr(accepted.visitingFee)} visit',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textMuted,
                   ),
                 ),
                 if (accepted.acceptedAt != null) ...[
@@ -840,7 +866,6 @@ class _AcceptedBidBanner extends StatelessWidget {
     );
   }
 }
-
 
 class _Timeline extends StatelessWidget {
   const _Timeline({required this.request});
@@ -991,7 +1016,6 @@ class _TimelineStep extends StatelessWidget {
     return '—';
   }
 }
-
 
 class _ActionBar extends ConsumerWidget {
   const _ActionBar({
@@ -1171,22 +1195,22 @@ class _ActionBar extends ConsumerWidget {
 
     switch (action) {
       case ServiceRequestAction.customerCounterOffer:
-        final seed = request.latestOffer?.amount;
-        final seedCurrency = request.latestOffer?.currency ?? 'PKR';
+        final seedAmount = request.latestOffer?.amount;
+        final seedVisit = request.latestOffer?.visitingFee;
         final bid = await showBidAmountSheet(
           context,
           title: 'Counter offer',
           ctaLabel: 'Send counter',
-          suggestedAmount: seed,
-          defaultCurrency: seedCurrency,
+          suggestedAmount: seedAmount,
+          suggestedVisitingFee: seedVisit,
           helperText:
-              'Propose a new amount. The worker will see this in the negotiation thread.',
+              'Propose new amounts. The worker will see this in the negotiation thread.',
         );
         if (bid == null) return;
         if (!context.mounted) return;
         final result = await controller.counterOffer(
           amount: bid.amount,
-          currency: bid.currency,
+          visitingFee: bid.visitingFee,
         );
         if (!context.mounted) return;
         _showResult(context, result, successMessage: 'Counter sent.');
@@ -1205,14 +1229,14 @@ class _ActionBar extends ConsumerWidget {
         break;
 
       case ServiceRequestAction.workerBid:
-        final seed = request.latestOffer?.amount;
-        final seedCurrency = request.latestOffer?.currency ?? 'PKR';
+        final seedAmount = request.latestOffer?.amount;
+        final seedVisit = request.latestOffer?.visitingFee;
         final bid = await showBidAmountSheet(
           context,
           title: 'Place bid',
           ctaLabel: 'Send bid',
-          suggestedAmount: seed,
-          defaultCurrency: seedCurrency,
+          suggestedAmount: seedAmount,
+          suggestedVisitingFee: seedVisit,
           helperText:
               'Propose your rate. The customer will see this in the negotiation thread.',
         );
@@ -1220,7 +1244,7 @@ class _ActionBar extends ConsumerWidget {
         if (!context.mounted) return;
         final result = await controller.workerBid(
           amount: bid.amount,
-          currency: bid.currency,
+          visitingFee: bid.visitingFee,
         );
         if (!context.mounted) return;
         _showResult(context, result, successMessage: 'Bid sent.');
@@ -1240,7 +1264,7 @@ class _ActionBar extends ConsumerWidget {
         }
         final result = await controller.workerAcceptCustomerCounter(
           amount: last.amount,
-          currency: last.currency,
+          visitingFee: last.visitingFee,
         );
         if (!context.mounted) return;
         _showResult(
@@ -1345,7 +1369,6 @@ class _ActionBar extends ConsumerWidget {
   }
 }
 
-
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel(this.text);
   final String text;
@@ -1383,11 +1406,6 @@ String _formatDateTime(DateTime? d) {
   final hh = d.hour.toString().padLeft(2, '0');
   final mm = d.minute.toString().padLeft(2, '0');
   return '${d.day} ${months[d.month - 1]} ${d.year} · $hh:$mm';
-}
-
-String _formatAmount(num n) {
-  if (n == n.truncate()) return n.toInt().toString();
-  return n.toString();
 }
 
 (String, Color) _statusVisuals(ServiceRequestStatus status) {

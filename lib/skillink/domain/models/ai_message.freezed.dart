@@ -281,7 +281,7 @@ as String,
 /// @nodoc
 mixin _$AiMessage {
 
- String get id; AiMessageRole get role; String get content; DateTime get createdAt; List<AiSource> get sources; Worker? get recommendedWorker; String? get suggestedTrade;
+ String get id; AiMessageRole get role; String get content; DateTime get createdAt; List<AiSource> get sources; Worker? get recommendedWorker; List<Worker> get recommendedWorkers; String? get suggestedTrade;
 /// Create a copy of AiMessage
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -294,16 +294,16 @@ $AiMessageCopyWith<AiMessage> get copyWith => _$AiMessageCopyWithImpl<AiMessage>
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is AiMessage&&(identical(other.id, id) || other.id == id)&&(identical(other.role, role) || other.role == role)&&(identical(other.content, content) || other.content == content)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&const DeepCollectionEquality().equals(other.sources, sources)&&(identical(other.recommendedWorker, recommendedWorker) || other.recommendedWorker == recommendedWorker)&&(identical(other.suggestedTrade, suggestedTrade) || other.suggestedTrade == suggestedTrade));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AiMessage&&(identical(other.id, id) || other.id == id)&&(identical(other.role, role) || other.role == role)&&(identical(other.content, content) || other.content == content)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&const DeepCollectionEquality().equals(other.sources, sources)&&(identical(other.recommendedWorker, recommendedWorker) || other.recommendedWorker == recommendedWorker)&&const DeepCollectionEquality().equals(other.recommendedWorkers, recommendedWorkers)&&(identical(other.suggestedTrade, suggestedTrade) || other.suggestedTrade == suggestedTrade));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,role,content,createdAt,const DeepCollectionEquality().hash(sources),recommendedWorker,suggestedTrade);
+int get hashCode => Object.hash(runtimeType,id,role,content,createdAt,const DeepCollectionEquality().hash(sources),recommendedWorker,const DeepCollectionEquality().hash(recommendedWorkers),suggestedTrade);
 
 @override
 String toString() {
-  return 'AiMessage(id: $id, role: $role, content: $content, createdAt: $createdAt, sources: $sources, recommendedWorker: $recommendedWorker, suggestedTrade: $suggestedTrade)';
+  return 'AiMessage(id: $id, role: $role, content: $content, createdAt: $createdAt, sources: $sources, recommendedWorker: $recommendedWorker, recommendedWorkers: $recommendedWorkers, suggestedTrade: $suggestedTrade)';
 }
 
 
@@ -314,7 +314,7 @@ abstract mixin class $AiMessageCopyWith<$Res>  {
   factory $AiMessageCopyWith(AiMessage value, $Res Function(AiMessage) _then) = _$AiMessageCopyWithImpl;
 @useResult
 $Res call({
- String id, AiMessageRole role, String content, DateTime createdAt, List<AiSource> sources, Worker? recommendedWorker, String? suggestedTrade
+ String id, AiMessageRole role, String content, DateTime createdAt, List<AiSource> sources, Worker? recommendedWorker, List<Worker> recommendedWorkers, String? suggestedTrade
 });
 
 
@@ -331,7 +331,7 @@ class _$AiMessageCopyWithImpl<$Res>
 
 /// Create a copy of AiMessage
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? role = null,Object? content = null,Object? createdAt = null,Object? sources = null,Object? recommendedWorker = freezed,Object? suggestedTrade = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? role = null,Object? content = null,Object? createdAt = null,Object? sources = null,Object? recommendedWorker = freezed,Object? recommendedWorkers = null,Object? suggestedTrade = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,role: null == role ? _self.role : role // ignore: cast_nullable_to_non_nullable
@@ -339,7 +339,8 @@ as AiMessageRole,content: null == content ? _self.content : content // ignore: c
 as String,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as DateTime,sources: null == sources ? _self.sources : sources // ignore: cast_nullable_to_non_nullable
 as List<AiSource>,recommendedWorker: freezed == recommendedWorker ? _self.recommendedWorker : recommendedWorker // ignore: cast_nullable_to_non_nullable
-as Worker?,suggestedTrade: freezed == suggestedTrade ? _self.suggestedTrade : suggestedTrade // ignore: cast_nullable_to_non_nullable
+as Worker?,recommendedWorkers: null == recommendedWorkers ? _self.recommendedWorkers : recommendedWorkers // ignore: cast_nullable_to_non_nullable
+as List<Worker>,suggestedTrade: freezed == suggestedTrade ? _self.suggestedTrade : suggestedTrade // ignore: cast_nullable_to_non_nullable
 as String?,
   ));
 }
@@ -437,10 +438,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  AiMessageRole role,  String content,  DateTime createdAt,  List<AiSource> sources,  Worker? recommendedWorker,  String? suggestedTrade)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  AiMessageRole role,  String content,  DateTime createdAt,  List<AiSource> sources,  Worker? recommendedWorker,  List<Worker> recommendedWorkers,  String? suggestedTrade)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _AiMessage() when $default != null:
-return $default(_that.id,_that.role,_that.content,_that.createdAt,_that.sources,_that.recommendedWorker,_that.suggestedTrade);case _:
+return $default(_that.id,_that.role,_that.content,_that.createdAt,_that.sources,_that.recommendedWorker,_that.recommendedWorkers,_that.suggestedTrade);case _:
   return orElse();
 
 }
@@ -458,10 +459,10 @@ return $default(_that.id,_that.role,_that.content,_that.createdAt,_that.sources,
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  AiMessageRole role,  String content,  DateTime createdAt,  List<AiSource> sources,  Worker? recommendedWorker,  String? suggestedTrade)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  AiMessageRole role,  String content,  DateTime createdAt,  List<AiSource> sources,  Worker? recommendedWorker,  List<Worker> recommendedWorkers,  String? suggestedTrade)  $default,) {final _that = this;
 switch (_that) {
 case _AiMessage():
-return $default(_that.id,_that.role,_that.content,_that.createdAt,_that.sources,_that.recommendedWorker,_that.suggestedTrade);case _:
+return $default(_that.id,_that.role,_that.content,_that.createdAt,_that.sources,_that.recommendedWorker,_that.recommendedWorkers,_that.suggestedTrade);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -478,10 +479,10 @@ return $default(_that.id,_that.role,_that.content,_that.createdAt,_that.sources,
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  AiMessageRole role,  String content,  DateTime createdAt,  List<AiSource> sources,  Worker? recommendedWorker,  String? suggestedTrade)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  AiMessageRole role,  String content,  DateTime createdAt,  List<AiSource> sources,  Worker? recommendedWorker,  List<Worker> recommendedWorkers,  String? suggestedTrade)?  $default,) {final _that = this;
 switch (_that) {
 case _AiMessage() when $default != null:
-return $default(_that.id,_that.role,_that.content,_that.createdAt,_that.sources,_that.recommendedWorker,_that.suggestedTrade);case _:
+return $default(_that.id,_that.role,_that.content,_that.createdAt,_that.sources,_that.recommendedWorker,_that.recommendedWorkers,_that.suggestedTrade);case _:
   return null;
 
 }
@@ -493,7 +494,7 @@ return $default(_that.id,_that.role,_that.content,_that.createdAt,_that.sources,
 @JsonSerializable()
 
 class _AiMessage implements AiMessage {
-  const _AiMessage({required this.id, required this.role, required this.content, required this.createdAt, final  List<AiSource> sources = const [], this.recommendedWorker, this.suggestedTrade}): _sources = sources;
+  const _AiMessage({required this.id, required this.role, required this.content, required this.createdAt, final  List<AiSource> sources = const [], this.recommendedWorker, final  List<Worker> recommendedWorkers = const <Worker>[], this.suggestedTrade}): _sources = sources,_recommendedWorkers = recommendedWorkers;
   factory _AiMessage.fromJson(Map<String, dynamic> json) => _$AiMessageFromJson(json);
 
 @override final  String id;
@@ -508,6 +509,13 @@ class _AiMessage implements AiMessage {
 }
 
 @override final  Worker? recommendedWorker;
+ final  List<Worker> _recommendedWorkers;
+@override@JsonKey() List<Worker> get recommendedWorkers {
+  if (_recommendedWorkers is EqualUnmodifiableListView) return _recommendedWorkers;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_recommendedWorkers);
+}
+
 @override final  String? suggestedTrade;
 
 /// Create a copy of AiMessage
@@ -523,16 +531,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AiMessage&&(identical(other.id, id) || other.id == id)&&(identical(other.role, role) || other.role == role)&&(identical(other.content, content) || other.content == content)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&const DeepCollectionEquality().equals(other._sources, _sources)&&(identical(other.recommendedWorker, recommendedWorker) || other.recommendedWorker == recommendedWorker)&&(identical(other.suggestedTrade, suggestedTrade) || other.suggestedTrade == suggestedTrade));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AiMessage&&(identical(other.id, id) || other.id == id)&&(identical(other.role, role) || other.role == role)&&(identical(other.content, content) || other.content == content)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&const DeepCollectionEquality().equals(other._sources, _sources)&&(identical(other.recommendedWorker, recommendedWorker) || other.recommendedWorker == recommendedWorker)&&const DeepCollectionEquality().equals(other._recommendedWorkers, _recommendedWorkers)&&(identical(other.suggestedTrade, suggestedTrade) || other.suggestedTrade == suggestedTrade));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,role,content,createdAt,const DeepCollectionEquality().hash(_sources),recommendedWorker,suggestedTrade);
+int get hashCode => Object.hash(runtimeType,id,role,content,createdAt,const DeepCollectionEquality().hash(_sources),recommendedWorker,const DeepCollectionEquality().hash(_recommendedWorkers),suggestedTrade);
 
 @override
 String toString() {
-  return 'AiMessage(id: $id, role: $role, content: $content, createdAt: $createdAt, sources: $sources, recommendedWorker: $recommendedWorker, suggestedTrade: $suggestedTrade)';
+  return 'AiMessage(id: $id, role: $role, content: $content, createdAt: $createdAt, sources: $sources, recommendedWorker: $recommendedWorker, recommendedWorkers: $recommendedWorkers, suggestedTrade: $suggestedTrade)';
 }
 
 
@@ -543,7 +551,7 @@ abstract mixin class _$AiMessageCopyWith<$Res> implements $AiMessageCopyWith<$Re
   factory _$AiMessageCopyWith(_AiMessage value, $Res Function(_AiMessage) _then) = __$AiMessageCopyWithImpl;
 @override @useResult
 $Res call({
- String id, AiMessageRole role, String content, DateTime createdAt, List<AiSource> sources, Worker? recommendedWorker, String? suggestedTrade
+ String id, AiMessageRole role, String content, DateTime createdAt, List<AiSource> sources, Worker? recommendedWorker, List<Worker> recommendedWorkers, String? suggestedTrade
 });
 
 
@@ -560,7 +568,7 @@ class __$AiMessageCopyWithImpl<$Res>
 
 /// Create a copy of AiMessage
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? role = null,Object? content = null,Object? createdAt = null,Object? sources = null,Object? recommendedWorker = freezed,Object? suggestedTrade = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? role = null,Object? content = null,Object? createdAt = null,Object? sources = null,Object? recommendedWorker = freezed,Object? recommendedWorkers = null,Object? suggestedTrade = freezed,}) {
   return _then(_AiMessage(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,role: null == role ? _self.role : role // ignore: cast_nullable_to_non_nullable
@@ -568,7 +576,8 @@ as AiMessageRole,content: null == content ? _self.content : content // ignore: c
 as String,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as DateTime,sources: null == sources ? _self._sources : sources // ignore: cast_nullable_to_non_nullable
 as List<AiSource>,recommendedWorker: freezed == recommendedWorker ? _self.recommendedWorker : recommendedWorker // ignore: cast_nullable_to_non_nullable
-as Worker?,suggestedTrade: freezed == suggestedTrade ? _self.suggestedTrade : suggestedTrade // ignore: cast_nullable_to_non_nullable
+as Worker?,recommendedWorkers: null == recommendedWorkers ? _self._recommendedWorkers : recommendedWorkers // ignore: cast_nullable_to_non_nullable
+as List<Worker>,suggestedTrade: freezed == suggestedTrade ? _self.suggestedTrade : suggestedTrade // ignore: cast_nullable_to_non_nullable
 as String?,
   ));
 }

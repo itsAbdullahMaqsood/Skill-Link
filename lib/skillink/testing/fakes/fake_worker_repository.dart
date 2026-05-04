@@ -2,10 +2,8 @@ import 'package:skilllink/services/auth_service.dart';
 import 'package:skilllink/skillink/data/mappers/worker_from_skillchain_user.dart';
 import 'package:skilllink/skillink/data/repositories/worker_repository.dart';
 import 'package:skilllink/skillink/domain/models/job.dart';
-import 'package:skilllink/skillink/domain/models/review.dart';
 import 'package:skilllink/skillink/domain/models/worker.dart';
 import 'package:skilllink/skillink/testing/models/sample_jobs.dart';
-import 'package:skilllink/skillink/testing/models/sample_reviews.dart';
 import 'package:skilllink/skillink/testing/models/sample_workers.dart';
 import 'package:skilllink/skillink/utils/result.dart';
 
@@ -73,6 +71,9 @@ class FakeWorkerRepository implements WorkerRepository {
   @override
   Future<Result<Worker>> getWorker(String id) async {
     await Future<void>.delayed(_latency);
+    final match = SampleWorkers.all.where((w) => w.id == id).toList();
+    if (match.isNotEmpty) return Success(match.first);
+
     final auth = _auth;
     if (auth != null && id.trim().isNotEmpty) {
       try {
@@ -85,20 +86,8 @@ class FakeWorkerRepository implements WorkerRepository {
       } catch (_) {
       }
     }
-    final match = SampleWorkers.all.where((w) => w.id == id).toList();
-    if (match.isEmpty) return const Failure('Worker not found.');
-    return Success(match.first);
+    return const Failure('Worker not found.');
   }
-
-  @override
-  Future<Result<List<Review>>> getReviews(
-    String workerId, {
-    int page = 1,
-  }) async {
-    await Future<void>.delayed(_latency);
-    return Success(SampleReviews.forWorker(workerId));
-  }
-
 
   @override
   Future<Result<Worker>> getMyProfile() async {
@@ -109,9 +98,18 @@ class FakeWorkerRepository implements WorkerRepository {
         if (await auth.isLabourBackend()) {
           final u = await auth.getCurrentUser();
           if (u != null) {
-            final w = WorkerFromSkillChainUser.map(u);
-            _me = w;
-            return Success(w);
+            final remote = await getWorker(u.id);
+            return remote.when(
+              success: (w) {
+                _me = w;
+                return Success(w);
+              },
+              failure: (String message, Exception? exception) {
+                final w = WorkerFromSkillChainUser.map(u);
+                _me = w;
+                return Success(w);
+              },
+            );
           }
         }
       } catch (_) {

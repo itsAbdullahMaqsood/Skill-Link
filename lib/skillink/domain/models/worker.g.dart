@@ -33,6 +33,7 @@ _Worker _$WorkerFromJson(Map<String, dynamic> json) => _Worker(
   role: json['role'] as String?,
   accountStatus: json['accountStatus'] as String?,
   experienceNote: json['experienceNote'] as String?,
+  location: json['location'] as String?,
 );
 
 Map<String, dynamic> _$WorkerToJson(_Worker instance) => <String, dynamic>{
@@ -56,4 +57,5 @@ Map<String, dynamic> _$WorkerToJson(_Worker instance) => <String, dynamic>{
   'role': instance.role,
   'accountStatus': instance.accountStatus,
   'experienceNote': instance.experienceNote,
+  'location': instance.location,
 };

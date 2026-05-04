@@ -7,7 +7,6 @@ import 'package:skilllink/skillink/domain/models/bid.dart';
 import 'package:skilllink/skillink/domain/models/job.dart';
 import 'package:skilllink/skillink/domain/models/job_status.dart';
 import 'package:skilllink/skillink/domain/models/payment_method.dart';
-import 'package:skilllink/skillink/domain/models/review.dart';
 import 'package:skilllink/skillink/domain/models/structured_address.dart';
 import 'package:skilllink/skillink/testing/models/sample_jobs.dart';
 import 'package:skilllink/skillink/utils/result.dart';
@@ -400,24 +399,6 @@ class FakeJobRepository implements JobRepository {
     _emit(jobId, updated);
     return Success(updated);
   }
-
-  @override
-  Future<Result<Review>> submitReview({
-    required String jobId,
-    required double rating,
-    String? comment,
-  }) async {
-    await Future<void>.delayed(_latency);
-    if (!_jobs.containsKey(jobId)) return Failure('Job not found.');
-    return Success(Review(
-      id: 'rev_${DateTime.now().microsecondsSinceEpoch}',
-      jobId: jobId,
-      rating: rating,
-      comment: comment,
-      createdAt: DateTime.now(),
-    ));
-  }
-
 
   @override
   Stream<Job> watchJob(String jobId) {

@@ -7,6 +7,7 @@ import 'package:skilllink/skillink/domain/models/chat_summary.dart';
 import 'package:skilllink/skillink/domain/models/user_role.dart';
 import 'package:skilllink/skillink/routing/routes.dart';
 import 'package:skilllink/skillink/ui/auth/view_models/auth_view_model.dart';
+import 'package:skilllink/skillink/data/providers.dart';
 import 'package:skilllink/skillink/ui/chat/view_models/chat_list_view_model.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_colors.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_typography.dart';
@@ -14,9 +15,23 @@ import 'package:skilllink/skillink/ui/core/ui/app_scaffold.dart';
 import 'package:skilllink/skillink/ui/core/ui/empty_state.dart';
 import 'package:skilllink/skillink/ui/core/ui/error_view.dart';
 import 'package:skilllink/skillink/ui/core/ui/loading_shimmer.dart';
+import 'package:skilllink/skillink/utils/avatar_url_image.dart';
 
 class ChatListScreen extends ConsumerWidget {
   const ChatListScreen({super.key});
+
+  Future<void> _onRefresh(WidgetRef ref) async {
+    final me = ref.read(authViewModelProvider).user;
+    if (me == null) return;
+    try {
+      await ref.read(chatRepositoryProvider).refreshUserChats(me.id);
+    } catch (_) {
+      // Swallow — the stream will still surface fresh data when it arrives,
+      // and any persistent failure is reported by the StreamProvider's
+      // error state.
+    }
+    ref.invalidate(chatListViewModelProvider);
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -34,38 +49,100 @@ class ChatListScreen extends ConsumerWidget {
               title: 'Sign in to chat',
               subtitle: 'Your conversations with workers and homeowners will appear here.',
             )
-          : stream.when(
-              loading: () => const LoadingShimmerList(itemCount: 6),
-              error: (e, _) => ErrorView(
-                message: 'Could not load chats.',
-                onRetry: () => ref.invalidate(chatListViewModelProvider),
-              ),
-              data: (chats) {
-                if (chats.isEmpty) {
-                  return const EmptyState(
-                    icon: Icons.chat_bubble_outline,
-                    title: 'No conversations yet',
-                    subtitle:
-                        'Start chatting with a worker from their profile or a posted job.',
-                  );
-                }
-                return ListView.separated(
-                  itemCount: chats.length,
-                  separatorBuilder: (_, _) => const Divider(
-                    height: 1,
-                    indent: 76,
-                    color: AppColors.divider,
+          : RefreshIndicator(
+              onRefresh: () => _onRefresh(ref),
+              color: AppColors.primary,
+              child: stream.when(
+                loading: () => const _ChatListLoading(),
+                error: (e, _) => _ScrollableFill(
+                  child: ErrorView(
+                    message: 'Could not load chats.',
+                    onRetry: () => ref.invalidate(chatListViewModelProvider),
                   ),
-                  itemBuilder: (_, i) {
-                    final chat = chats[i];
-                    return _ChatRow(
-                      chat: chat,
-                      onTap: () => context.push(Routes.chatThread(chat.chatId)),
+                ),
+                data: (chats) {
+                  // Hide shells for chats that have never exchanged a
+                  // message, and force most-recent-first ordering so a new
+                  // incoming message bumps that conversation to the top.
+                  final visible = chats
+                      .where((c) => c.lastMessageAt != null)
+                      .toList()
+                    ..sort(
+                      (a, b) => b.lastMessageAt!.compareTo(a.lastMessageAt!),
                     );
-                  },
-                );
-              },
+                  if (visible.isEmpty) {
+                    return const _ScrollableFill(
+                      child: EmptyState(
+                        icon: Icons.chat_bubble_outline,
+                        title: 'No conversations yet',
+                        subtitle:
+                            'Start chatting with a worker from their profile or a posted job.',
+                      ),
+                    );
+                  }
+                  return ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    itemCount: visible.length,
+                    separatorBuilder: (_, _) => const Divider(
+                      height: 1,
+                      indent: 76,
+                      color: AppColors.divider,
+                    ),
+                    itemBuilder: (_, i) {
+                      final chat = visible[i];
+                      return _ChatRow(
+                        chat: chat,
+                        onTap: () =>
+                            context.push(Routes.chatThread(chat.chatId)),
+                      );
+                    },
+                  );
+                },
+              ),
             ),
+    );
+  }
+}
+
+class _ChatListLoading extends StatelessWidget {
+  const _ChatListLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: const [
+        LoadingShimmerList(itemCount: 6),
+        Center(
+          child: SizedBox(
+            width: 32,
+            height: 32,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ScrollableFill extends StatelessWidget {
+  const _ScrollableFill({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: child,
+        ),
+      ),
     );
   }
 }
@@ -215,10 +292,11 @@ class _Avatar extends StatelessWidget {
         ),
       ),
     );
-    if (url == null || url!.isEmpty || !url!.startsWith('http')) return fallback;
+    final resolved = resolveActiveBackendMediaUrl(url);
+    if (resolved == null) return fallback;
     return ClipOval(
       child: CachedNetworkImage(
-        imageUrl: url!,
+        imageUrl: resolved,
         width: 48,
         height: 48,
         fit: BoxFit.cover,

@@ -21,11 +21,16 @@ class WorkerProfileScreen extends ConsumerWidget {
     super.key,
     required this.workerId,
     this.hideBookButton = false,
+    this.hideMessageButton = false,
   });
 
   final String workerId;
 
   final bool hideBookButton;
+
+  /// Hide the "Message" CTA. Used when the user navigated here from the
+  /// chat thread, so we don't loop them back into the same chat.
+  final bool hideMessageButton;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -55,39 +60,41 @@ class WorkerProfileScreen extends ConsumerWidget {
       ),
       bottomNavigationBar: state.worker == null
           ? null
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: hideBookButton ? 1 : 1,
-                      child: SecondaryButton(
-                        label: 'Message',
-                        icon: Icons.chat_bubble_outline_rounded,
-                        onPressed: () => ChatEntry.openWithWorker(
-                          context,
-                          ref,
-                          worker: state.worker!,
-                        ),
-                      ),
+          : (hideBookButton && hideMessageButton)
+              ? null
+              : SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                    child: Row(
+                      children: [
+                        if (!hideMessageButton)
+                          Expanded(
+                            child: SecondaryButton(
+                              label: 'Message',
+                              icon: Icons.chat_bubble_outline_rounded,
+                              onPressed: () => ChatEntry.openWithWorker(
+                                context,
+                                ref,
+                                worker: state.worker!,
+                              ),
+                            ),
+                          ),
+                        if (!hideMessageButton && !hideBookButton)
+                          const SizedBox(width: 12),
+                        if (!hideBookButton)
+                          Expanded(
+                            flex: hideMessageButton ? 1 : 2,
+                            child: PrimaryButton(
+                              label: 'Book Now',
+                              icon: Icons.event_available_rounded,
+                              onPressed: () =>
+                                  context.push(Routes.booking(workerId)),
+                            ),
+                          ),
+                      ],
                     ),
-                    if (!hideBookButton) ...[
-                      const SizedBox(width: 12),
-                      Expanded(
-                        flex: 2,
-                        child: PrimaryButton(
-                          label: 'Book Now',
-                          icon: Icons.event_available_rounded,
-                          onPressed: () =>
-                              context.push(Routes.booking(workerId)),
-                        ),
-                      ),
-                    ],
-                  ],
+                  ),
                 ),
-              ),
-            ),
     );
   }
 }
@@ -461,12 +468,7 @@ class _ReviewTile extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(
-                child: Text(
-                  review.reviewerName ?? 'Anonymous',
-                  style: AppTypography.labelLarge,
-                ),
-              ),
+              const Spacer(),
               Row(
                 children: [
                   for (var i = 1; i <= 5; i++)

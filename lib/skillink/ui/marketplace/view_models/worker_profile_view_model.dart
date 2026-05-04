@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skilllink/skillink/data/providers.dart';
 import 'package:skilllink/skillink/domain/models/review.dart';
 import 'package:skilllink/skillink/domain/models/worker.dart';
-import 'package:skilllink/skillink/utils/result.dart';
 
 class WorkerProfileState {
   const WorkerProfileState({
@@ -42,15 +41,13 @@ class WorkerProfileViewModel extends StateNotifier<WorkerProfileState> {
   final String _workerId;
 
   Future<void> _load() async {
-    final repo = _ref.read(workerRepositoryProvider);
-    final results = await Future.wait([
-      repo.getWorker(_workerId),
-      repo.getReviews(_workerId),
-    ]);
+    final workerRepo = _ref.read(workerRepositoryProvider);
+    final reviewRepo = _ref.read(reviewRepositoryProvider);
+    final workerFuture = workerRepo.getWorker(_workerId);
+    final summaryFuture = reviewRepo.getUserReviews(_workerId);
+    final workerResult = await workerFuture;
+    final summaryResult = await summaryFuture;
     if (!mounted) return;
-
-    final workerResult = results[0] as Result<Worker>;
-    final reviewsResult = results[1] as Result<List<Review>>;
 
     if (workerResult.isFailure && state.worker == null) {
       state = WorkerProfileState(
@@ -61,18 +58,16 @@ class WorkerProfileViewModel extends StateNotifier<WorkerProfileState> {
     }
 
     var worker = workerResult.valueOrNull ?? state.worker;
-    final reviews = reviewsResult.valueOrNull ?? state.reviews;
-    if (worker != null &&
-        reviews.isNotEmpty &&
-        worker.reviewCount == 0 &&
-        worker.rating == 0) {
-      final avg =
-          reviews.map((r) => r.rating).reduce((a, b) => a + b) / reviews.length;
+    final summary = summaryResult.valueOrNull;
+    final reviews = summary?.reviews ?? state.reviews;
+
+    if (worker != null && summary != null) {
       worker = worker.copyWith(
-        reviewCount: reviews.length,
-        rating: avg,
+        rating: summary.user.ratings,
+        reviewCount: summary.user.reviewCount,
       );
     }
+
     state = state.copyWith(
       isLoading: false,
       worker: worker,
@@ -82,6 +77,7 @@ class WorkerProfileViewModel extends StateNotifier<WorkerProfileState> {
 
   Future<void> refresh() async {
     state = state.copyWith(isLoading: true);
+    _ref.invalidate(labourServiceIdToNameProvider);
     await _load();
   }
 }

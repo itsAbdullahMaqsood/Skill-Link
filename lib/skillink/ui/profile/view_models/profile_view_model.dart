@@ -1,8 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:skilllink/skillink/data/providers.dart';
 import 'package:skilllink/skillink/data/repositories/auth_repository.dart';
-import 'package:skilllink/skillink/domain/models/structured_address.dart';
 import 'package:skilllink/skillink/ui/auth/view_models/auth_view_model.dart';
 
 class ProfileUiState {
@@ -49,7 +50,12 @@ class ProfileViewModel extends StateNotifier<ProfileUiState> {
   Future<void> save({
     required String name,
     required String phone,
-    required StructuredAddress address,
+    required String location,
+    String bio = '',
+    int? age,
+    required String gender,
+    String pastExperience = '',
+    File? profilePic,
   }) async {
     state = state.copyWith(
       isSaving: true,
@@ -57,12 +63,22 @@ class ProfileViewModel extends StateNotifier<ProfileUiState> {
       clearSaveSuccess: true,
     );
     final res = await _ref.read(authRepositoryProvider).updateUserProfile(
-          UserProfileUpdate(name: name, phone: phone, address: address),
+          UserProfileUpdate(
+            name: name,
+            phone: phone,
+            location: location,
+            bio: bio,
+            age: age,
+            gender: gender,
+            pastExperience: pastExperience,
+            profilePic: profilePic,
+          ),
         );
     if (!mounted) return;
     res.when(
       success: (user) {
         _ref.read(authViewModelProvider.notifier).setUser(user);
+        _ref.invalidate(currentLabourUserProvider);
         state = state.copyWith(isSaving: false, saveSuccess: true);
       },
       failure: (msg, _) =>
@@ -84,15 +100,14 @@ class ProfileViewModel extends StateNotifier<ProfileUiState> {
 
     state = state.copyWith(uploadingAvatar: true, clearError: true);
 
-    final avatarUrl = Uri.file(file.path).toString();
-
-    final patch = await _ref
-        .read(authRepositoryProvider)
-        .updateUserProfile(UserProfileUpdate(avatarUrl: avatarUrl));
+    final patch = await _ref.read(authRepositoryProvider).updateUserProfile(
+          UserProfileUpdate(profilePic: File(file.path)),
+        );
     if (!mounted) return;
     patch.when(
       success: (u) {
         _ref.read(authViewModelProvider.notifier).setUser(u);
+        _ref.invalidate(currentLabourUserProvider);
         state = state.copyWith(
           uploadingAvatar: false,
           avatarSuccessCount: state.avatarSuccessCount + 1,

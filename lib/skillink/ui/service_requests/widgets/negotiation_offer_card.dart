@@ -3,6 +3,7 @@ import 'package:skilllink/skillink/domain/logic/service_request_actions.dart';
 import 'package:skilllink/skillink/domain/models/service_request.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_colors.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_typography.dart';
+import 'package:skilllink/skillink/utils/currency_format.dart';
 
 class NegotiationOfferCard extends StatelessWidget {
   const NegotiationOfferCard({
@@ -71,7 +72,7 @@ class NegotiationOfferCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '${offer.currency} ${_formatAmount(offer.amount)}',
+                formatPkr(offer.total),
                 style: AppTypography.titleLarge.copyWith(
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
@@ -88,6 +89,12 @@ class NegotiationOfferCard extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${formatPkr(offer.amount)} labour + ${formatPkr(offer.visitingFee)} visit',
+            style: AppTypography.bodySmall
+                .copyWith(color: AppColors.textMuted),
           ),
           if (showAcceptHint) ...[
             const SizedBox(height: 10),
@@ -299,11 +306,6 @@ class _ActionRow extends StatelessWidget {
     }
     return Row(children: children);
   }
-}
-
-String _formatAmount(num n) {
-  if (n == n.truncate()) return n.toInt().toString();
-  return n.toString();
 }
 
 String _formatDateTime(DateTime? d) {

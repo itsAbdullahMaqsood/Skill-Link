@@ -21,6 +21,7 @@ class Routes {
   static const workerJobs = '/worker/jobs';
   static const workerEarnings = '/worker/earnings';
   static const workerMyProfile = '/worker/profile';
+  static const workerMyProfileEdit = '/worker/profile/edit';
 
   static String workerJobDetail(String jobId) => '/worker/jobs/$jobId';
   static const workerJobDetailPath = '/worker/jobs/:jobId';
@@ -31,6 +32,7 @@ class Routes {
   static const profileEdit = '/profile/edit';
   static const helpSupport = '/profile/help';
   static const notifications = '/notifications';
+  static const myReviews = '/profile/reviews';
 
   static const about = '/about';
   static const myPosts = '/my-posts';
@@ -102,9 +104,24 @@ class Routes {
 
   static String signup(UserRole role) => '/signup/${role.name}';
 
-  static String workerProfile(String id, {bool hideBook = false}) =>
-      hideBook ? '/workers/$id?hideBook=1' : '/workers/$id';
+  static String workerProfile(
+    String id, {
+    bool hideBook = false,
+    bool hideMessage = false,
+  }) {
+    final params = <String, String>{
+      if (hideBook) 'hideBook': '1',
+      if (hideMessage) 'hideMessage': '1',
+    };
+    if (params.isEmpty) return '/workers/$id';
+    final query = params.entries.map((e) => '${e.key}=${e.value}').join('&');
+    return '/workers/$id?$query';
+  }
+
   static const workerProfilePath = '/workers/:id';
+
+  static String peerProfile(String peerId) => '/peer/$peerId';
+  static const peerProfilePath = '/peer/:peerId';
 
   static String marketplace({String? trade}) =>
       trade == null ? homeownerMarketplace : '$homeownerMarketplace?trade=$trade';

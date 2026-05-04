@@ -11,7 +11,10 @@ abstract class Review with _$Review {
     required double rating,
     String? comment,
     required DateTime createdAt,
-    String? reviewerName,
+    String? reviewerId,
+    String? revieweeId,
+    String? serviceRequestId,
+    DateTime? updatedAt,
   }) = _Review;
 
   factory Review.fromJson(Map<String, dynamic> json) =>

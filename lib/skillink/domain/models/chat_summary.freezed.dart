@@ -15,9 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$ChatSummary {
 
- String get chatId; String get peerId; String get peerName; String? get peerAvatar; UserRole get peerRole;/// Last message preview text (or "[Image]" / "[Voice note]") shown in the
-/// inbox row. Nullable until the first message is sent.
- String? get lastMessagePreview; ChatMessageType? get lastMessageType; DateTime? get lastMessageAt; int get unreadCount;
+ String get chatId; String get peerId; String get peerName; String? get peerAvatar; UserRole get peerRole; String? get lastMessagePreview; ChatMessageType? get lastMessageType; DateTime? get lastMessageAt; int get unreadCount;
 /// Create a copy of ChatSummary
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -227,8 +225,6 @@ class _ChatSummary implements ChatSummary {
 @override final  String peerName;
 @override final  String? peerAvatar;
 @override final  UserRole peerRole;
-/// Last message preview text (or "[Image]" / "[Voice note]") shown in the
-/// inbox row. Nullable until the first message is sent.
 @override final  String? lastMessagePreview;
 @override final  ChatMessageType? lastMessageType;
 @override final  DateTime? lastMessageAt;

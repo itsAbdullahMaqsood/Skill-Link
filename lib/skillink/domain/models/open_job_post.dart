@@ -76,6 +76,8 @@ class OpenJobPost {
     required this.bidCount,
     required this.createdAt,
     required this.updatedAt,
+    required this.expectedAmount,
+    required this.expectedCurrency,
   });
 
   final String id;
@@ -99,6 +101,9 @@ class OpenJobPost {
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
+  final num? expectedAmount;
+  final String? expectedCurrency;
+
   factory OpenJobPost.fromJson(Map<String, dynamic> json) {
     final root = json['openJobPost'] is Map<String, dynamic>
         ? json['openJobPost'] as Map<String, dynamic>
@@ -113,6 +118,11 @@ class OpenJobPost {
         ? ServiceRequestTimeSlot.fromJson(
             root['timeSlot'] as Map<String, dynamic>)
         : const ServiceRequestTimeSlot(startTime: '', endTime: '');
+
+    final expectedAmountRaw = root['expectedAmount'];
+    final num? expectedAmount = expectedAmountRaw is num
+        ? expectedAmountRaw
+        : num.tryParse(expectedAmountRaw?.toString() ?? '');
 
     return OpenJobPost(
       id: (root['id'] ?? root['_id'] ?? '').toString(),
@@ -136,6 +146,8 @@ class OpenJobPost {
       bidCount: (root['bidCount'] as num?)?.toInt(),
       createdAt: _parseDate(root['createdAt']),
       updatedAt: _parseDate(root['updatedAt']),
+      expectedAmount: expectedAmount,
+      expectedCurrency: _optionalString(root['expectedCurrency']),
     );
   }
 

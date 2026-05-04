@@ -1,9 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skilllink/skillink/data/providers.dart';
+import 'package:skilllink/skillink/data/repositories/review_repository.dart';
 import 'package:skilllink/skillink/data/repositories/worker_repository.dart';
 import 'package:skilllink/skillink/domain/models/review.dart';
 import 'package:skilllink/skillink/domain/models/worker.dart';
-import 'package:skilllink/skillink/utils/result.dart';
 
 class WorkerProfileState {
   const WorkerProfileState({
@@ -54,28 +54,26 @@ class WorkerProfileViewModel extends StateNotifier<WorkerProfileState> {
   final Ref _ref;
 
   WorkerRepository get _workers => _ref.read(workerRepositoryProvider);
+  ReviewRepository get _reviews => _ref.read(reviewRepositoryProvider);
 
   Future<void> _bootstrap() async {
     final profileRes = await _workers.getMyProfile();
     if (!mounted) return;
 
     var worker = profileRes.valueOrNull;
-    final reviewsRes = worker != null
-        ? await _workers.getReviews(worker.id)
-        : const Success<List<Review>>(<Review>[]);
-    if (!mounted) return;
+    var reviews = const <Review>[];
 
-    final reviews = reviewsRes.valueOrNull ?? const <Review>[];
-    if (worker != null &&
-        reviews.isNotEmpty &&
-        worker.reviewCount == 0 &&
-        worker.rating == 0) {
-      final avg =
-          reviews.map((r) => r.rating).reduce((a, b) => a + b) / reviews.length;
-      worker = worker.copyWith(
-        reviewCount: reviews.length,
-        rating: avg,
-      );
+    if (worker != null) {
+      final summaryRes = await _reviews.getUserReviews(worker.id);
+      if (!mounted) return;
+      final summary = summaryRes.valueOrNull;
+      if (summary != null) {
+        reviews = summary.reviews;
+        worker = worker.copyWith(
+          rating: summary.user.ratings,
+          reviewCount: summary.user.reviewCount,
+        );
+      }
     }
 
     state = state.copyWith(
@@ -91,6 +89,8 @@ class WorkerProfileViewModel extends StateNotifier<WorkerProfileState> {
       clearError: true,
       clearSaveSuccess: true,
     );
+    _ref.invalidate(currentLabourUserProvider);
+    _ref.invalidate(labourServiceIdToNameProvider);
     await _bootstrap();
   }
 
@@ -119,6 +119,11 @@ class WorkerProfileViewModel extends StateNotifier<WorkerProfileState> {
   void clearError() {
     if (state.errorMessage == null) return;
     state = state.copyWith(clearError: true);
+  }
+
+  void clearSaveSuccess() {
+    if (!state.saveSuccess) return;
+    state = state.copyWith(clearSaveSuccess: true);
   }
 }
 
