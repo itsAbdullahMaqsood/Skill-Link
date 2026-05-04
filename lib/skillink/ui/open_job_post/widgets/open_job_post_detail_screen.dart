@@ -69,16 +69,16 @@ class _OpenJobPostDetailScreenState
   }
 
   void _startPolling() {
-    // _pollTimer?.cancel();
-    // _pollTimer = Timer.periodic(_kPollInterval, (_) {
-    //   if (!mounted) return;
-    //   final busy = ref
-    //       .read(openJobPostActionsControllerProvider(widget.postId))
-    //       .isBusy;
-    //   if (busy) return;
-    //   ref.invalidate(openJobPostByIdProvider(widget.postId));
-    //   ref.invalidate(openJobPostBidsProvider(widget.postId));
-    // });
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(_kPollInterval, (_) {
+      if (!mounted) return;
+      final busy = ref
+          .read(openJobPostActionsControllerProvider(widget.postId))
+          .isBusy;
+      if (busy) return;
+      ref.invalidate(openJobPostByIdProvider(widget.postId));
+      ref.invalidate(openJobPostBidsProvider(widget.postId));
+    });
     // TODO(perf): re-enable once infinite-loop fixes are verified stable.
     // Pull-to-refresh still works. Automatic polling disabled to avoid
     // unnecessary /open-job-posts/{id} + /bids calls every 10 s.

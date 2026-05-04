@@ -93,6 +93,8 @@ class Routes {
   static const completionPromptPath = '/completion-prompt/:jobId';
 
 
+  static const iotTraining = '/iot/training';
+
   static const alerts = '/iot/alerts';
 
   static String alertDetail(String id) => '/iot/alerts/$id';

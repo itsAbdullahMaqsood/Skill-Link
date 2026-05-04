@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:skilllink/skillink/config/app_constants.dart';
+import 'package:skilllink/skillink/data/providers.dart';
 import 'package:skilllink/skillink/data/repositories/iot_repository.dart';
+import 'package:skilllink/skillink/data/services/baseline_anomaly_detector.dart';
 import 'package:skilllink/skillink/domain/models/anomaly.dart';
 import 'package:skilllink/skillink/domain/models/appliance.dart';
 import 'package:skilllink/skillink/domain/models/sensor_reading.dart';
@@ -39,6 +41,7 @@ class ApplianceDetailScreen extends ConsumerWidget {
 
     final state = ref.watch(provider);
     final vm = ref.read(provider.notifier);
+    final baselineModel = ref.watch(baselineModelProvider).valueOrNull;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -53,7 +56,7 @@ class ApplianceDetailScreen extends ConsumerWidget {
           style: AppTypography.headlineMedium,
         ),
       ),
-      body: _body(context, state, vm),
+      body: _body(context, state, vm, baselineModel),
     );
   }
 
@@ -61,6 +64,7 @@ class ApplianceDetailScreen extends ConsumerWidget {
     BuildContext context,
     ApplianceDetailState state,
     ApplianceDetailViewModel vm,
+    BaselineModel? model,
   ) {
     if (state.isLoading && state.appliance == null) {
       return const _Shimmer();
@@ -81,7 +85,7 @@ class ApplianceDetailScreen extends ConsumerWidget {
       children: [
         _StatusBadge(open: anomalyOpen, deviceId: appliance.iotDeviceId),
         const SizedBox(height: 16),
-        _GaugesRow(reading: live, appliance: appliance),
+        _GaugesRow(reading: live, appliance: appliance, model: model),
         const SizedBox(height: 20),
         _HistoryCard(state: state, vm: vm),
         const SizedBox(height: 16),
@@ -174,13 +178,34 @@ class _StatusBadge extends StatelessWidget {
 }
 
 class _GaugesRow extends StatelessWidget {
-  const _GaugesRow({required this.reading, required this.appliance});
+  const _GaugesRow({
+    required this.reading,
+    required this.appliance,
+    required this.model,
+  });
 
   final SensorReading? reading;
   final Appliance appliance;
+  final BaselineModel? model;
 
   @override
   Widget build(BuildContext context) {
+    final v = reading?.voltage ?? 0;
+    final i = reading?.current ?? 0;
+
+    final voltageAnomalous = model != null &&
+        reading != null &&
+        (v > model!.voltageMean + 3 * model!.voltageStd ||
+            v < model!.voltageMean - 3 * model!.voltageStd);
+    final currentAnomalous = model != null &&
+        reading != null &&
+        (i > model!.currentMean + 3 * model!.currentStd ||
+            i < model!.currentMean - 3 * model!.currentStd);
+
+    final voltageMin = model == null ? 180.0 : model!.voltageP01 - 5;
+    final voltageMax = model == null ? 260.0 : model!.voltageP99 + 5;
+    final currentMax = model == null ? 10.0 : model!.currentP99 + 0.1;
+
     // ListView children get unbounded max height; do not use stretch here.
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -188,21 +213,21 @@ class _GaugesRow extends StatelessWidget {
         Expanded(
           child: SensorGauge(
             label: 'Voltage',
-            value: reading?.voltage ?? 0,
+            value: v,
             unit: 'V',
-            minValue: 180,
-            maxValue: 260,
-            isAnomalous: (reading?.voltage ?? 0) > 240,
+            minValue: voltageMin,
+            maxValue: voltageMax,
+            isAnomalous: voltageAnomalous,
           ),
         ),
         const SizedBox(width: 10),
         Expanded(
           child: SensorGauge(
             label: 'Current',
-            value: reading?.current ?? 0,
+            value: i,
             unit: 'A',
-            maxValue: 10,
-            isAnomalous: (reading?.current ?? 0) > 8,
+            maxValue: currentMax,
+            isAnomalous: currentAnomalous,
           ),
         ),
         const SizedBox(width: 10),

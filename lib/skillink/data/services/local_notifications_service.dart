@@ -187,7 +187,12 @@ class LocalNotificationsService {
   String _titleFor(Anomaly a) {
     final label = switch (a.type) {
       'voltage_spike' => 'Voltage spike detected',
+      'voltage_sag' => 'Voltage drop detected',
+      'voltage_flicker' => 'Voltage flicker detected',
+      'voltage_instability' => 'Voltage instability detected',
       'current_surge' => 'Current surge detected',
+      'current_drop' => 'Unexpected load drop detected',
+      'abnormal_load_pattern' => 'Abnormal load pattern detected',
       'over_temperature' => 'Overheating detected',
       _ => 'Device health alert',
     };

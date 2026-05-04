@@ -35,6 +35,7 @@ import 'package:skilllink/skillink/ui/iot_monitor/widgets/alert_detail_screen.da
 import 'package:skilllink/skillink/ui/iot_monitor/widgets/alerts_screen.dart';
 import 'package:skilllink/skillink/ui/iot_monitor/widgets/appliance_detail_screen.dart';
 import 'package:skilllink/skillink/ui/iot_monitor/widgets/appliances_list_screen.dart';
+import 'package:skilllink/skillink/ui/iot_monitor/widgets/baseline_training_screen.dart';
 import 'package:skilllink/skillink/ui/job_tracking/widgets/job_history_screen.dart';
 import 'package:skilllink/skillink/ui/job_tracking/widgets/job_tracking_screen.dart';
 import 'package:skilllink/skillink/ui/job_tracking/widgets/rate_worker_screen.dart';
@@ -551,6 +552,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final id = state.pathParameters['id'] ?? '';
           return ApplianceDetailScreen(applianceId: id);
         },
+      ),
+      GoRoute(
+        path: Routes.iotTraining,
+        name: 'iotTraining',
+        builder: (_, __) => const BaselineTrainingScreen(),
       ),
       GoRoute(
         path: Routes.alerts,

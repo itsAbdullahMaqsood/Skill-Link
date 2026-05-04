@@ -22,6 +22,8 @@ import 'package:skilllink/skillink/ui/service_requests/widgets/party_card.dart';
 import 'package:skilllink/skillink/ui/service_requests/widgets/request_location_map.dart';
 import 'package:skilllink/skillink/utils/currency_format.dart';
 
+const Duration _kPollInterval = Duration(seconds: 10);
+
 class SentRequestDetailScreen extends ConsumerStatefulWidget {
   const SentRequestDetailScreen({super.key, required this.requestId});
 
@@ -64,15 +66,15 @@ class _SentRequestDetailScreenState
   }
 
   void _startPolling() {
-    // _pollTimer?.cancel();
-    // _pollTimer = Timer.periodic(_kDetailPollInterval, (_) {
-    //   if (!mounted) return;
-    //   final submitting = ref
-    //       .read(serviceRequestActionsControllerProvider(widget.requestId))
-    //       .isSubmitting;
-    //   if (submitting) return;
-    //   ref.invalidate(serviceRequestByIdProvider(widget.requestId));
-    // });
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(_kPollInterval, (_) {
+      if (!mounted) return;
+      final submitting = ref
+          .read(serviceRequestActionsControllerProvider(widget.requestId))
+          .isSubmitting;
+      if (submitting) return;
+      ref.invalidate(serviceRequestByIdProvider(widget.requestId));
+    });
   }
 
   void _stopPolling() {
@@ -295,68 +297,70 @@ class _DetailBody extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-        _HeaderCard(request: request),
-        if (_showCustomerCompletionNudge(ref, request, viewer)) ...[
-          _CustomerCompletionNudgeCard(requestId: request.id),
-        ],
-        if (request.cancelled) ...[
-          const SizedBox(height: 12),
-          _CancelledBanner(cancelledAt: request.updatedAt),
-        ],
-        if (counterparty.$1 != null) ...[
-          const SizedBox(height: 16),
-          _SectionLabel(
-            counterparty.$2 == PartyCardVariant.worker ? 'Worker' : 'Customer',
+          _HeaderCard(request: request),
+          if (_showCustomerCompletionNudge(ref, request, viewer)) ...[
+            _CustomerCompletionNudgeCard(requestId: request.id),
+          ],
+          if (request.cancelled) ...[
+            const SizedBox(height: 12),
+            _CancelledBanner(cancelledAt: request.updatedAt),
+          ],
+          if (counterparty.$1 != null) ...[
+            const SizedBox(height: 16),
+            _SectionLabel(
+              counterparty.$2 == PartyCardVariant.worker
+                  ? 'Worker'
+                  : 'Customer',
+            ),
+            const SizedBox(height: 8),
+            PartyCard(party: counterparty.$1!, variant: counterparty.$2),
+          ],
+          if (viewer == ServiceRequestViewer.customer &&
+              _showsLiveTracking(request) &&
+              request.effectiveWorkerId.isNotEmpty &&
+              request.serviceAddress.trim().isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _SectionLabel(_locationLabel(request.status)),
+            const SizedBox(height: 8),
+            LiveTrackingMap(
+              workerId: request.effectiveWorkerId,
+              serviceAddress: request.serviceAddress,
+              status: request.status,
+            ),
+          ] else if (request.serviceAddress.trim().isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _SectionLabel('Location'),
+            const SizedBox(height: 8),
+            RequestLocationMap(address: request.serviceAddress, viewer: viewer),
+          ],
+          _SectionLabel('Description'),
+          const SizedBox(height: 6),
+          Text(
+            request.description.trim().isEmpty
+                ? 'No description provided.'
+                : request.description,
+            style: AppTypography.bodyMedium,
           ),
-          const SizedBox(height: 8),
-          PartyCard(party: counterparty.$1!, variant: counterparty.$2),
-        ],
-        if (viewer == ServiceRequestViewer.customer &&
-            _showsLiveTracking(request) &&
-            request.effectiveWorkerId.isNotEmpty &&
-            request.serviceAddress.trim().isNotEmpty) ...[
-          const SizedBox(height: 16),
-          _SectionLabel(_locationLabel(request.status)),
-          const SizedBox(height: 8),
-          LiveTrackingMap(
-            workerId: request.effectiveWorkerId,
-            serviceAddress: request.serviceAddress,
-            status: request.status,
-          ),
-        ] else if (request.serviceAddress.trim().isNotEmpty) ...[
-          const SizedBox(height: 16),
-          _SectionLabel('Location'),
-          const SizedBox(height: 8),
-          RequestLocationMap(address: request.serviceAddress, viewer: viewer),
-        ],
-        _SectionLabel('Description'),
-        const SizedBox(height: 6),
-        Text(
-          request.description.trim().isEmpty
-              ? 'No description provided.'
-              : request.description,
-          style: AppTypography.bodyMedium,
-        ),
-        if (request.photos.isNotEmpty) ...[
+          if (request.photos.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            _SectionLabel('Photos'),
+            const SizedBox(height: 8),
+            _PhotosStrip(paths: request.photos),
+          ],
           const SizedBox(height: 20),
-          _SectionLabel('Photos'),
+          _SectionLabel('Details'),
           const SizedBox(height: 8),
-          _PhotosStrip(paths: request.photos),
-        ],
-        const SizedBox(height: 20),
-        _SectionLabel('Details'),
-        const SizedBox(height: 8),
-        _InfoCard(request: request),
-        if (hasNegotiation) ...[
+          _InfoCard(request: request),
+          if (hasNegotiation) ...[
+            const SizedBox(height: 20),
+            _SectionLabel('Bids'),
+            const SizedBox(height: 8),
+            _NegotiationSection(request: request, viewer: viewer),
+          ],
           const SizedBox(height: 20),
-          _SectionLabel('Bids'),
+          _SectionLabel('Progress'),
           const SizedBox(height: 8),
-          _NegotiationSection(request: request, viewer: viewer),
-        ],
-        const SizedBox(height: 20),
-        _SectionLabel('Progress'),
-        const SizedBox(height: 8),
-        _Timeline(request: request),
+          _Timeline(request: request),
         ],
       ),
     );

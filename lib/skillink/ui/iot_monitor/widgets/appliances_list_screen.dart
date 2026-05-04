@@ -24,20 +24,19 @@ class AppliancesListScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    ref.listen<AppliancesListState>(
-      appliancesListViewModelProvider,
-      (prev, next) {
-        final msg = next.errorMessage;
-        if (msg == null || msg == prev?.errorMessage) return;
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(SnackBar(
-            content: Text(msg),
-            behavior: SnackBarBehavior.floating,
-          ));
-        ref.read(appliancesListViewModelProvider.notifier).clearError();
-      },
-    );
+    ref.listen<AppliancesListState>(appliancesListViewModelProvider, (
+      prev,
+      next,
+    ) {
+      final msg = next.errorMessage;
+      if (msg == null || msg == prev?.errorMessage) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
+        );
+      ref.read(appliancesListViewModelProvider.notifier).clearError();
+    });
 
     final state = ref.watch(appliancesListViewModelProvider);
     final alerts = ref.watch(alertsViewModelProvider);
@@ -72,10 +71,15 @@ class AppliancesListScreen extends ConsumerWidget {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.only(bottom: 88),
           children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: _BaselineStatusPill(),
+            ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: const _Esp32RtdbLiveCard(),
             ),
+
             if (state.isLoading && state.appliances.isEmpty)
               const _GridShimmer()
             else if (state.appliances.isEmpty)
@@ -96,8 +100,7 @@ class AppliancesListScreen extends ConsumerWidget {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                gridDelegate:
-                    const SliverGridDelegateWithFixedCrossAxisCount(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 2,
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 12,
@@ -113,14 +116,19 @@ class AppliancesListScreen extends ConsumerWidget {
                   return _ApplianceTile(
                     appliance: appliance,
                     liveReading: live,
-                    hasOpenAnomaly: openAnomalyApplianceIds
-                        .contains(appliance.id),
-                    onTap: () => context.push(
-                      Routes.applianceDetail(appliance.id),
+                    hasOpenAnomaly: openAnomalyApplianceIds.contains(
+                      appliance.id,
                     ),
+                    onTap: () =>
+                        context.push(Routes.applianceDetail(appliance.id)),
                   );
                 },
               ),
+            const SizedBox(height: 12),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: _InjectAnomalyDropdown(),
+            ),
           ],
         ),
       ),
@@ -164,12 +172,16 @@ class _Esp32RtdbLiveCardState extends ConsumerState<_Esp32RtdbLiveCard> {
       if (_fakeAmpsTimer != null) return;
       _fakeAmpsTimer = Timer.periodic(const Duration(milliseconds: 850), (_) {
         if (!mounted) return;
-        setState(() {
-          final t = DateTime.now().millisecondsSinceEpoch / 1000.0;
-          final base = 0.25 * (1 + math.sin(t * 1.55));
-          final ripple = 0.12 * math.sin(t * 4.8) + 0.04 * math.sin(t * 11.2);
-          _fakeAmps = (base + ripple).clamp(0.0, 0.5);
-        });
+        final t = DateTime.now().millisecondsSinceEpoch / 1000.0;
+        final base = 0.45 * (1 + math.sin(t * 1.55));
+        final ripple = 0.12 * math.sin(t * 4.8) + 0.04 * math.sin(t * 11.2);
+        final amps = (base + ripple).clamp(0.05, 0.95);
+        setState(() => _fakeAmps = amps);
+        final rtdb = ref.read(firebaseRtdbLiveServiceProvider);
+        final lastV =
+            ref.read(esp32SensorDataLiveStreamProvider).valueOrNull?.voltage ??
+            220.0;
+        rtdb.writeFakeCurrent(voltage: lastV, current: amps);
       });
     } else {
       _fakeAmpsTimer?.cancel();
@@ -177,10 +189,9 @@ class _Esp32RtdbLiveCardState extends ConsumerState<_Esp32RtdbLiveCard> {
     }
   }
 
-  void _toggleFakeCurrentDemo() {
+  void _toggleFakeCurrent() {
     final next = !ref.read(esp32LiveMonitorFakeCurrentProvider);
     ref.read(esp32LiveMonitorFakeCurrentProvider.notifier).state = next;
-    _ensureFakeAmpsTicker(next);
   }
 
   @override
@@ -200,9 +211,7 @@ class _Esp32RtdbLiveCardState extends ConsumerState<_Esp32RtdbLiveCard> {
       child: Ink(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: AppColors.accent.withValues(alpha: 0.22),
-          ),
+          border: Border.all(color: AppColors.accent.withValues(alpha: 0.22)),
           boxShadow: [
             BoxShadow(
               blurRadius: 20,
@@ -257,16 +266,15 @@ class _Esp32RtdbLiveCardState extends ConsumerState<_Esp32RtdbLiveCard> {
           const SizedBox(height: 12),
           Text(
             'Listening on Realtime Database path `sensorData`…',
-            style: AppTypography.bodySmall.copyWith(
-              color: AppColors.textMuted,
-            ),
+            style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
           ),
         ],
       );
     }
 
-    final timeStr = DateFormat('yyyy-MM-dd HH:mm:ss')
-        .format(reading.timestamp.toLocal());
+    final timeStr = DateFormat(
+      'yyyy-MM-dd HH:mm:ss',
+    ).format(reading.timestamp.toLocal());
 
     final amps = fakeCurrent ? _fakeAmps : reading.current;
     final watts = fakeCurrent
@@ -295,10 +303,7 @@ class _Esp32RtdbLiveCardState extends ConsumerState<_Esp32RtdbLiveCard> {
           ],
         ),
         const SizedBox(height: 10),
-        _metric(
-          label: 'Power',
-          value: '${watts.toStringAsFixed(0)} W',
-        ),
+        _metric(label: 'Power', value: '${watts.toStringAsFixed(0)} W'),
         const SizedBox(height: 8),
         Text(
           'Updated $timeStr',
@@ -319,17 +324,14 @@ class _Esp32RtdbLiveCardState extends ConsumerState<_Esp32RtdbLiveCard> {
         color: AppColors.accent.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: const Icon(
-        Icons.sensors_rounded,
-        color: AppColors.accent,
-      ),
+      child: const Icon(Icons.sensors_rounded, color: AppColors.accent),
     );
 
     return Row(
       children: [
         GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onLongPress: _toggleFakeCurrentDemo,
+          onLongPress: _toggleFakeCurrent,
           child: iconChild,
         ),
         const SizedBox(width: 12),
@@ -337,10 +339,7 @@ class _Esp32RtdbLiveCardState extends ConsumerState<_Esp32RtdbLiveCard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'ESP32 smart monitor',
-                style: AppTypography.titleLarge,
-              ),
+              Text('ESP32 smart monitor', style: AppTypography.titleLarge),
               Text(
                 'Firebase Realtime Database',
                 style: AppTypography.bodySmall.copyWith(
@@ -391,9 +390,7 @@ class _Esp32RtdbLiveCardState extends ConsumerState<_Esp32RtdbLiveCard> {
       children: [
         Text(
           label,
-          style: AppTypography.bodySmall.copyWith(
-            color: AppColors.textMuted,
-          ),
+          style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
         ),
         const SizedBox(height: 2),
         Text(
@@ -421,9 +418,7 @@ class _Esp32RtdbLiveCardState extends ConsumerState<_Esp32RtdbLiveCard> {
         const SizedBox(height: 8),
         Text(
           'Connecting to Firebase…',
-          style: AppTypography.bodySmall.copyWith(
-            color: AppColors.textMuted,
-          ),
+          style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
         ),
       ],
     );
@@ -456,8 +451,10 @@ class _AlertsBellAction extends StatelessWidget {
       children: [
         IconButton(
           onPressed: () => context.push(Routes.alerts),
-          icon: const Icon(Icons.notifications_outlined,
-              color: AppColors.textPrimary),
+          icon: const Icon(
+            Icons.notifications_outlined,
+            color: AppColors.textPrimary,
+          ),
           tooltip: 'Alerts',
         ),
         if (unread > 0)
@@ -592,6 +589,179 @@ class _ApplianceTile extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _BaselineStatusPill extends ConsumerWidget {
+  const _BaselineStatusPill();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(baselineModelProvider);
+    final model = async.valueOrNull;
+    final trained = model != null;
+    final color = trained ? AppColors.success : AppColors.accent;
+    final icon = trained ? Icons.verified_rounded : Icons.auto_graph_rounded;
+    final title = trained ? 'Baseline trained' : 'No baseline yet';
+    final subtitle = trained
+        ? 'on ${model.sampleCount} samples · ${_friendlyAge(model.trainedAt)}'
+        : 'Tap to seed + train the anomaly detector';
+    return InkWell(
+      onTap: () => context.push(Routes.iotTraining),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: AppTypography.labelLarge.copyWith(color: color),
+                  ),
+                  Text(subtitle, style: AppTypography.bodySmall),
+                ],
+              ),
+            ),
+            Text(
+              trained ? 'Retrain →' : 'Train →',
+              style: AppTypography.labelMedium.copyWith(color: color),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _friendlyAge(DateTime ts) {
+    final diff = DateTime.now().difference(ts);
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+}
+
+enum _InjectKind { spike, flicker, load }
+
+class _InjectAnomalyDropdown extends ConsumerStatefulWidget {
+  const _InjectAnomalyDropdown();
+
+  @override
+  ConsumerState<_InjectAnomalyDropdown> createState() =>
+      _InjectAnomalyDropdownState();
+}
+
+class _InjectAnomalyDropdownState
+    extends ConsumerState<_InjectAnomalyDropdown> {
+  bool _busy = false;
+
+  Future<void> _run(_InjectKind k) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    final rtdb = ref.read(firebaseRtdbLiveServiceProvider);
+    final messenger = ScaffoldMessenger.of(context);
+    final label = switch (k) {
+      _InjectKind.spike => 'Voltage spike',
+      _InjectKind.flicker => 'Voltage flicker',
+      _InjectKind.load => 'Load anomaly',
+    };
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('$label…'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    try {
+      switch (k) {
+        case _InjectKind.spike:
+          await rtdb.injectVoltageSpike();
+          break;
+        case _InjectKind.flicker:
+          await rtdb.injectVoltageFlicker();
+          break;
+        case _InjectKind.load:
+          await rtdb.injectLoadAnomaly();
+          break;
+      }
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text('$label sent'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    } catch (e) {
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text('$label failed: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.bolt_rounded, color: AppColors.accent),
+          const SizedBox(width: 8),
+          Expanded(
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<_InjectKind>(
+                isExpanded: true,
+                value: null,
+                hint: Text(
+                  _busy ? 'Injecting…' : 'Inject anomaly',
+                  style: AppTypography.labelLarge,
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: _InjectKind.spike,
+                    child: Text('Voltage spike (248 V)'),
+                  ),
+                  DropdownMenuItem(
+                    value: _InjectKind.flicker,
+                    child: Text('Voltage flicker (215 ↔ 232 V)'),
+                  ),
+                  DropdownMenuItem(
+                    value: _InjectKind.load,
+                    child: Text('Load anomaly (1.6 A @ 220 V)'),
+                  ),
+                ],
+                onChanged: _busy ? null : (k) => k == null ? null : _run(k),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -71,4 +71,47 @@ class FirebaseRtdbLiveService {
         .onValue
         .map((e) => _parseValue(e.snapshot.value));
   }
+
+  /// Dev/demo: write a single live reading to the `sensorData` path.
+  Future<void> writeOneShotReading({
+    required double voltage,
+    required double current,
+  }) async {
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    await _ref(AppConstants.firebaseEsp32SensorDataPath).set({
+      'voltage': voltage,
+      'current': current,
+      'power': (voltage * current).abs(),
+      'timestamp': ts,
+    });
+  }
+
+  Future<void> injectVoltageSpike() =>
+      writeOneShotReading(voltage: 248, current: 0.45);
+
+  Future<void> injectVoltageFlicker() async {
+    const pairs = [215.0, 232.0, 215.0, 232.0, 215.0];
+    for (final v in pairs) {
+      await writeOneShotReading(voltage: v, current: 0.45);
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+    }
+  }
+
+  Future<void> injectLoadAnomaly() =>
+      writeOneShotReading(voltage: 220, current: 1.6);
+
+  /// Update only `current` (and derived `power` + `timestamp`) on `sensorData`.
+  /// Voltage is whatever the last writer set. Used by the hidden double-tap
+  /// fake-amperes demo on the live monitor.
+  Future<void> writeFakeCurrent({
+    required double voltage,
+    required double current,
+  }) async {
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    await _ref(AppConstants.firebaseEsp32SensorDataPath).update({
+      'current': current,
+      'power': (voltage * current).abs(),
+      'timestamp': ts,
+    });
+  }
 }

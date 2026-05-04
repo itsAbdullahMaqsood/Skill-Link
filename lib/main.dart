@@ -69,6 +69,7 @@ class SkillChainApp extends ConsumerWidget {
     ref.watch(fcmBindingProvider);
     ref.watch(completionPromptBindingProvider);
     ref.watch(workerLiveLocationBindingProvider);
+    ref.watch(liveAnomalyMonitorBindingProvider);
 
     final router = ref.watch(appRouterProvider);
 

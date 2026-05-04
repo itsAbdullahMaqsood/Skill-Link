@@ -44,5 +44,9 @@ abstract class IotRepository {
     required String type,
   });
 
+  /// Record an anomaly detected by the on-device monitor (no notification fire;
+  /// the monitor owns notification dispatch).
+  void recordDetectedAnomaly(Anomaly anomaly);
+
   Future<Result<void>> markAnomalyRead(String id);
 }

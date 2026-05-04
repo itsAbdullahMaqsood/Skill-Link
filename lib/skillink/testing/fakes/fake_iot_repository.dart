@@ -203,6 +203,12 @@ class FakeIotRepository implements IotRepository {
   }
 
   @override
+  void recordDetectedAnomaly(Anomaly anomaly) {
+    _anomalies.insert(0, anomaly);
+    if (!_anomalyStream.isClosed) _anomalyStream.add(anomaly);
+  }
+
+  @override
   Future<Result<void>> markAnomalyRead(String id) async {
     await Future<void>.delayed(const Duration(milliseconds: 150));
     final idx = _anomalies.indexWhere((a) => a.id == id);

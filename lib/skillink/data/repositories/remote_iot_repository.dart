@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:skilllink/skillink/config/app_constants.dart';
 import 'package:skilllink/skillink/data/repositories/iot_repository.dart';
 import 'package:skilllink/skillink/data/services/api_service.dart';
@@ -166,6 +167,16 @@ class RemoteIotRepository implements IotRepository {
       return Failure(ErrorMapper.fromException(e), e);
     } on Exception catch (e) {
       return Failure(ErrorMapper.fromException(e), e);
+    }
+  }
+
+  @override
+  void recordDetectedAnomaly(Anomaly anomaly) {
+    if (kDebugMode) {
+      debugPrint(
+        'RemoteIotRepository.recordDetectedAnomaly stub: ${anomaly.id} '
+        '(${anomaly.type}). Backend integration pending.',
+      );
     }
   }
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -36,7 +38,12 @@ import 'package:skilllink/skillink/data/repositories/skillchain_auth_repository.
 import 'package:skilllink/skillink/data/repositories/socketio_chat_repository.dart';
 import 'package:skilllink/skillink/data/repositories/worker_repository.dart';
 import 'package:skilllink/skillink/data/services/api_service.dart';
+import 'package:skilllink/skillink/data/services/baseline_anomaly_detector.dart';
+import 'package:skilllink/skillink/data/services/baseline_model_storage.dart';
 import 'package:skilllink/skillink/data/services/eta_service.dart';
+import 'package:skilllink/skillink/data/services/live_anomaly_monitor.dart';
+import 'package:skilllink/skillink/data/services/sensor_history_loader.dart';
+import 'package:skilllink/skillink/data/services/synthetic_sensor_seeder.dart';
 import 'package:skilllink/skillink/data/services/geocoding_cache.dart';
 import 'package:skilllink/skillink/data/services/recent_worker_open_bid_storage.dart';
 import 'package:skilllink/skillink/data/services/fcm_service.dart';
@@ -393,6 +400,65 @@ final forwardGeocodeProvider =
     return service.forwardGeocode(trimmed);
   },
 );
+
+final baselineModelStorageProvider = Provider<BaselineModelStorage>(
+  (ref) => BaselineModelStorage(),
+);
+
+final baselineModelProvider = FutureProvider<BaselineModel?>((ref) async {
+  return ref.watch(baselineModelStorageProvider).load();
+});
+
+final syntheticSensorSeederProvider = Provider<SyntheticSensorSeeder>(
+  (ref) => SyntheticSensorSeeder(),
+);
+
+/// Cached training samples loaded from RTDB `sensorHistory`.
+///
+/// Lifecycle:
+/// - First read triggers a single RTDB fetch (~1-2 s for 2000 samples).
+/// - Result is cached in memory for the life of the process; subsequent reads
+///   are instant. Survives navigation (no `autoDispose`).
+/// - Invalidate after seeding new data so the chart picks it up.
+/// - Both [BaselineTrainingViewModel.trainFromRtdb] and the chart widgets read
+///   from this provider so a single fetch serves both.
+final cachedTrainingSamplesProvider =
+    FutureProvider<List<SensorReading>>((ref) async {
+  final loader = ref.watch(sensorHistoryLoaderProvider);
+  List<SensorReading>? out;
+  await for (final p in loader.load()) {
+    if (p.samples != null) out = p.samples;
+  }
+  return out ?? const <SensorReading>[];
+});
+
+final sensorHistoryLoaderProvider = Provider<SensorHistoryLoader>(
+  (ref) => SensorHistoryLoader(),
+);
+
+final liveAnomalyMonitorProvider = Provider<LiveAnomalyMonitor>((ref) {
+  final monitor = LiveAnomalyMonitor(
+    rtdb: ref.watch(firebaseRtdbLiveServiceProvider),
+    iot: ref.watch(iotRepositoryProvider),
+    notifications: ref.watch(localNotificationsServiceProvider),
+    modelGetter: () => ref.read(baselineModelProvider).valueOrNull,
+  );
+  ref.onDispose(monitor.stop);
+  return monitor;
+});
+
+/// Watch this provider somewhere (e.g. [SkillChainApp.build]) to start the
+/// live monitor as soon as a baseline model is available, and stop when it
+/// disappears (e.g. user clears training).
+final liveAnomalyMonitorBindingProvider = Provider<void>((ref) {
+  final model = ref.watch(baselineModelProvider).valueOrNull;
+  final monitor = ref.watch(liveAnomalyMonitorProvider);
+  if (model != null) {
+    unawaited(monitor.start());
+  } else {
+    unawaited(monitor.stop());
+  }
+});
 
 final iotRepositoryProvider = Provider<IotRepository>((ref) {
   if (kUseFakeRepositories) {

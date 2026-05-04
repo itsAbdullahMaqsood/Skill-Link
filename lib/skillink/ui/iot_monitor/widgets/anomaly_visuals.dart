@@ -9,14 +9,24 @@ class AnomalyVisuals {
 
   static String titleForType(String type) => switch (type) {
         'voltage_spike' => 'Voltage Spike',
+        'voltage_sag' => 'Voltage Drop',
+        'voltage_flicker' => 'Voltage Flicker',
+        'voltage_instability' => 'Voltage Instability',
         'current_surge' => 'Current Surge',
+        'current_drop' => 'Load Drop',
+        'abnormal_load_pattern' => 'Abnormal Load Pattern',
         'over_temperature' => 'Overheating',
         _ => 'Anomaly',
       };
 
   static IconData iconForType(String type) => switch (type) {
         'voltage_spike' => Icons.electrical_services_rounded,
+        'voltage_sag' => Icons.trending_down_rounded,
+        'voltage_flicker' => Icons.bolt_rounded,
+        'voltage_instability' => Icons.show_chart_rounded,
         'current_surge' => Icons.flash_on_rounded,
+        'current_drop' => Icons.trending_down_rounded,
+        'abnormal_load_pattern' => Icons.scatter_plot_rounded,
         'over_temperature' => Icons.local_fire_department_rounded,
         _ => Icons.warning_amber_rounded,
       };
