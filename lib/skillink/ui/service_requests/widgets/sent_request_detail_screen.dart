@@ -11,6 +11,7 @@ import 'package:skilllink/skillink/domain/models/service_request.dart';
 import 'package:skilllink/skillink/routing/routes.dart';
 import 'package:skilllink/skillink/ui/auth/view_models/auth_view_model.dart';
 import 'package:skilllink/skillink/ui/completion_report/view_models/pending_completion_reports_view_model.dart';
+import 'package:skilllink/skillink/ui/job_tracking/view_models/rated_jobs_provider.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_colors.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_typography.dart';
 import 'package:skilllink/skillink/ui/core/ui/loading_shimmer.dart';
@@ -196,6 +197,30 @@ bool _showCustomerCompletionNudge(
   return !ref.watch(acknowledgedCompletionReportsProvider).contains(request.id);
 }
 
+bool _showCustomerRateWorker(
+  WidgetRef ref,
+  ServiceRequest request,
+  ServiceRequestViewer viewer,
+) {
+  if (viewer != ServiceRequestViewer.customer) return false;
+  if (request.status != ServiceRequestStatus.completed) return false;
+  final reviewed = ref.watch(reviewedJobIdsProvider).valueOrNull;
+  if (reviewed != null && reviewed.contains(request.id)) return false;
+  return true;
+}
+
+bool _showWorkerRateHomeowner(
+  WidgetRef ref,
+  ServiceRequest request,
+  ServiceRequestViewer viewer,
+) {
+  if (viewer != ServiceRequestViewer.worker) return false;
+  if (request.status != ServiceRequestStatus.completed) return false;
+  final reviewed = ref.watch(reviewedJobIdsProvider).valueOrNull;
+  if (reviewed != null && reviewed.contains(request.id)) return false;
+  return true;
+}
+
 /// Customer-facing live worker map is shown for the entire active window of a
 /// service request — once the worker has placed a bid (`bid_received` onward),
 /// the app auto-publishes their location (see `workerLiveLocationBindingProvider`)
@@ -271,6 +296,102 @@ class _CustomerCompletionNudgeCard extends ConsumerWidget {
   }
 }
 
+class _CustomerRateWorkerCard extends StatelessWidget {
+  const _CustomerRateWorkerCard({required this.requestId});
+
+  final String requestId;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.accent.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppColors.accent.withValues(alpha: 0.45),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Rate your worker', style: AppTypography.titleLarge),
+              const SizedBox(height: 6),
+              Text(
+                'Share how the job went. Your rating helps other homeowners.',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textMuted,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton.icon(
+                  onPressed: () => context.push(Routes.rateJob(requestId)),
+                  icon: const Icon(Icons.star_rounded, size: 18),
+                  label: const Text('Rate & review'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _WorkerRateHomeownerCard extends StatelessWidget {
+  const _WorkerRateHomeownerCard({required this.requestId});
+
+  final String requestId;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.accent.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppColors.accent.withValues(alpha: 0.45),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Rate your customer', style: AppTypography.titleLarge),
+              const SizedBox(height: 6),
+              Text(
+                'Share how the job went. Your rating helps other workers.',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textMuted,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton.icon(
+                  onPressed: () => context.push(Routes.rateJob(requestId)),
+                  icon: const Icon(Icons.star_rounded, size: 18),
+                  label: const Text('Rate & review'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _DetailBody extends ConsumerWidget {
   const _DetailBody({required this.request, required this.viewer});
   final ServiceRequest request;
@@ -300,6 +421,12 @@ class _DetailBody extends ConsumerWidget {
           _HeaderCard(request: request),
           if (_showCustomerCompletionNudge(ref, request, viewer)) ...[
             _CustomerCompletionNudgeCard(requestId: request.id),
+          ],
+          if (_showCustomerRateWorker(ref, request, viewer)) ...[
+            _CustomerRateWorkerCard(requestId: request.id),
+          ],
+          if (_showWorkerRateHomeowner(ref, request, viewer)) ...[
+            _WorkerRateHomeownerCard(requestId: request.id),
           ],
           if (request.cancelled) ...[
             const SizedBox(height: 12),

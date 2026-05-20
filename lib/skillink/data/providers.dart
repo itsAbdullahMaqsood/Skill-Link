@@ -98,13 +98,12 @@ final currentLabourUserProvider = FutureProvider<sc.UserModel?>((ref) async {
 });
 
 final apiServiceProvider = Provider<ApiService>((ref) {
-  return ApiService(
-    authService: ref.watch(skillChainAuthServiceProvider),
-  );
+  return ApiService(authService: ref.watch(skillChainAuthServiceProvider));
 });
 
-final labourServiceIdToNameProvider =
-    FutureProvider<Map<String, String>>((ref) async {
+final labourServiceIdToNameProvider = FutureProvider<Map<String, String>>((
+  ref,
+) async {
   final auth = ref.watch(skillChainAuthServiceProvider);
   final token = await auth.getAccessToken();
   if (token == null || token.isEmpty) return {};
@@ -112,31 +111,34 @@ final labourServiceIdToNameProvider =
   return {for (final s in items) s.id: s.name};
 });
 
-final mediaUploadServiceProvider =
-    Provider<MediaUploadService>((ref) => MediaUploadService());
+final mediaUploadServiceProvider = Provider<MediaUploadService>(
+  (ref) => MediaUploadService(),
+);
 
-final firebaseRtdbLiveServiceProvider =
-    Provider<FirebaseRtdbLiveService>((ref) => FirebaseRtdbLiveService());
+final firebaseRtdbLiveServiceProvider = Provider<FirebaseRtdbLiveService>(
+  (ref) => FirebaseRtdbLiveService(),
+);
 
 /// ESP32 → `/sensorData` on the IoT Realtime Database (see `FIREBASE_RTDB_URL` in `.env`).
 /// Shown on the Live Monitor screen; works on Android after [Firebase.initializeApp] in `main`.
 final esp32SensorDataLiveStreamProvider =
     StreamProvider.autoDispose<SensorReading?>((ref) {
-  if (defaultTargetPlatform != TargetPlatform.android) {
-    return Stream<SensorReading?>.value(null);
-  }
-  if (Firebase.apps.isEmpty) {
-    return Stream<SensorReading?>.value(null);
-  }
-  return ref.watch(firebaseRtdbLiveServiceProvider).watchEsp32SensorData();
-});
+      if (defaultTargetPlatform != TargetPlatform.android) {
+        return Stream<SensorReading?>.value(null);
+      }
+      if (Firebase.apps.isEmpty) {
+        return Stream<SensorReading?>.value(null);
+      }
+      return ref.watch(firebaseRtdbLiveServiceProvider).watchEsp32SensorData();
+    });
 
 /// Dev/demo: Live Monitor ESP32 card shows simulated amperes when enabled
 /// (toggled via a hidden gesture on that screen only).
 final esp32LiveMonitorFakeCurrentProvider = StateProvider<bool>((ref) => false);
 
-final mapsDistanceServiceProvider =
-    Provider<MapsDistanceService>((ref) => MapsDistanceService());
+final mapsDistanceServiceProvider = Provider<MapsDistanceService>(
+  (ref) => MapsDistanceService(),
+);
 
 final postedJobsHubProvider = Provider<PostedJobsHub>((ref) {
   final notifications = ref.watch(localNotificationsServiceProvider);
@@ -164,7 +166,8 @@ final postedJobBidRepositoryProvider = Provider<PostedJobBidRepository>((ref) {
 });
 
 final localNotificationsServiceProvider = Provider<LocalNotificationsService>(
-    (ref) => LocalNotificationsService());
+  (ref) => LocalNotificationsService(),
+);
 
 final fcmServiceProvider = Provider<FcmService>((ref) {
   final svc = FcmService();
@@ -204,8 +207,9 @@ final jobRepositoryProvider = Provider<JobRepository>((ref) {
   return RemoteJobRepository(apiService: ref.watch(apiServiceProvider));
 });
 
-final serviceRequestRepositoryProvider =
-    Provider<ServiceRequestRepository>((ref) {
+final serviceRequestRepositoryProvider = Provider<ServiceRequestRepository>((
+  ref,
+) {
   return RemoteServiceRequestRepository(
     apiService: ref.watch(apiServiceProvider),
   );
@@ -218,15 +222,12 @@ final reviewRepositoryProvider = Provider<ReviewRepository>((ref) {
 /// Labour-side reviews + aggregate rating for the signed-in homeowner (drawer / profile).
 final homeownerReviewsSummaryProvider =
     FutureProvider.autoDispose<ReviewsSummary?>((ref) async {
-  final user = ref.watch(authViewModelProvider).user;
-  if (user == null || user.role != UserRole.homeowner) return null;
-  final repo = ref.watch(reviewRepositoryProvider);
-  final res = await repo.getUserReviews(user.id);
-  return res.when(
-    success: (s) => s,
-    failure: (_, _) => null,
-  );
-});
+      final user = ref.watch(authViewModelProvider).user;
+      if (user == null || user.role != UserRole.homeowner) return null;
+      final repo = ref.watch(reviewRepositoryProvider);
+      final res = await repo.getUserReviews(user.id);
+      return res.when(success: (s) => s, failure: (_, _) => null);
+    });
 
 final geocodingCacheProvider = Provider<GeocodingCache>((ref) {
   return GeocodingCache();
@@ -236,13 +237,15 @@ final etaServiceProvider = Provider<EtaService>((ref) {
   return EtaService(geocoding: ref.watch(geocodingCacheProvider));
 });
 
-final workerLiveLocationServiceProvider =
-    Provider<WorkerLiveLocationService>((ref) {
+final workerLiveLocationServiceProvider = Provider<WorkerLiveLocationService>((
+  ref,
+) {
   return WorkerLiveLocationService();
 });
 
-final workerLocationPublisherProvider =
-    Provider<WorkerLocationPublisher>((ref) {
+final workerLocationPublisherProvider = Provider<WorkerLocationPublisher>((
+  ref,
+) {
   final pub = WorkerLocationPublisher(
     service: ref.watch(workerLiveLocationServiceProvider),
   );
@@ -257,66 +260,71 @@ final workerLocationPublisherProvider =
 /// RTDB subscription and the UI snaps back to loading when scrolled back.
 final workerLiveLocationProvider =
     StreamProvider.family<WorkerLiveLocation?, String>((ref, workerId) {
-  return ref
-      .watch(workerLiveLocationServiceProvider)
-      .watch(workerId);
-});
+      return ref.watch(workerLiveLocationServiceProvider).watch(workerId);
+    });
 
 /// One-shot ETA from worker's registered home address to a service address.
 /// Cached per (workerLocation, serviceAddress) pair.
 final preJobEtaProvider = FutureProvider.autoDispose
-    .family<EtaResult?, ({String workerLocation, String serviceAddress})>(
-        (ref, key) async {
-  final from = key.workerLocation.trim();
-  final to = key.serviceAddress.trim();
-  if (from.isEmpty || to.isEmpty) return null;
-  return ref.watch(etaServiceProvider).betweenAddresses(from, to);
-});
+    .family<EtaResult?, ({String workerLocation, String serviceAddress})>((
+      ref,
+      key,
+    ) async {
+      final from = key.workerLocation.trim();
+      final to = key.serviceAddress.trim();
+      if (from.isEmpty || to.isEmpty) return null;
+      return ref.watch(etaServiceProvider).betweenAddresses(from, to);
+    });
 
 /// ETA from a known worker GPS coordinate (e.g. the last fix from
 /// `/workerLocations/{workerId}` in RTDB) to a service address. Used by
 /// [EtaBadge] when a live fix is available, in preference to the worker's
 /// static profile address. Cached per (lat, lng, serviceAddress).
-final liveCoordinateEtaProvider = FutureProvider.autoDispose.family<EtaResult?,
-    ({double workerLat, double workerLng, String serviceAddress})>(
-  (ref, key) async {
-    final to = key.serviceAddress.trim();
-    if (to.isEmpty) return null;
-    return ref.watch(etaServiceProvider).fromLatLngToAddress(
-          fromLat: key.workerLat,
-          fromLng: key.workerLng,
-          toAddress: to,
-        );
-  },
-);
+final liveCoordinateEtaProvider = FutureProvider.autoDispose
+    .family<
+      EtaResult?,
+      ({double workerLat, double workerLng, String serviceAddress})
+    >((ref, key) async {
+      final to = key.serviceAddress.trim();
+      if (to.isEmpty) return null;
+      return ref
+          .watch(etaServiceProvider)
+          .fromLatLngToAddress(
+            fromLat: key.workerLat,
+            fromLng: key.workerLng,
+            toAddress: to,
+          );
+    });
 
 final openJobPostRepositoryProvider = Provider<OpenJobPostRepository>((ref) {
-  return RemoteOpenJobPostRepository(
-    apiService: ref.watch(apiServiceProvider),
-  );
+  return RemoteOpenJobPostRepository(apiService: ref.watch(apiServiceProvider));
 });
 
 final myOpenJobPostsProvider =
-    FutureProvider.family<List<OpenJobPost>, ServiceRequestRole>(
-        (ref, role) async {
-  // Not autoDispose — multiple watchers (drawer + dashboard) and listener
-  // churn during widget rebuilds were causing /open-job-posts/my to be
-  // hammered on every blink. Action controllers explicitly invalidate.
-  final repo = ref.watch(openJobPostRepositoryProvider);
-  final result = await repo.listMyOpenJobPosts(role: role);
-  return result.when(
-    success: (list) => list,
-    failure: (message, _) => throw Exception(message),
-  );
-});
+    FutureProvider.family<List<OpenJobPost>, ServiceRequestRole>((
+      ref,
+      role,
+    ) async {
+      // Not autoDispose — multiple watchers (drawer + dashboard) and listener
+      // churn during widget rebuilds were causing /open-job-posts/my to be
+      // hammered on every blink. Action controllers explicitly invalidate.
+      final repo = ref.watch(openJobPostRepositoryProvider);
+      final result = await repo.listMyOpenJobPosts(role: role);
+      return result.when(
+        success: (list) => list,
+        failure: (message, _) => throw Exception(message),
+      );
+    });
 
 /// [OpenJobPost.serviceRequestId] values for posts awarded to the signed-in worker.
 /// Used to hide duplicate service-request rows next to tracking [Job] flows.
-final workerAwardedOpenJobServiceRequestIdsProvider =
-    Provider<Set<String>>((ref) {
+final workerAwardedOpenJobServiceRequestIdsProvider = Provider<Set<String>>((
+  ref,
+) {
   final uid = ref.watch(authViewModelProvider).user?.id ?? '';
-  final postsAsync =
-      ref.watch(myOpenJobPostsProvider(ServiceRequestRole.worker));
+  final postsAsync = ref.watch(
+    myOpenJobPostsProvider(ServiceRequestRole.worker),
+  );
   return postsAsync.maybeWhen(
     data: (posts) => workerAwardedOpenJobServiceRequestIds(posts, uid),
     orElse: () => {},
@@ -328,78 +336,78 @@ final workerAwardedOpenJobServiceRequestIdsProvider =
 /// when API posts are no longer `openForBids`.
 final recentLocalWorkerOpenBidsProvider =
     FutureProvider.autoDispose<List<LocalRecentOpenJobBid>>((ref) async {
-  final uid = ref.watch(authViewModelProvider).user?.id;
-  if (uid == null || uid.isEmpty) return const [];
-  return RecentWorkerOpenBidStorage.load(uid);
-});
+      final uid = ref.watch(authViewModelProvider).user?.id;
+      if (uid == null || uid.isEmpty) return const [];
+      return RecentWorkerOpenBidStorage.load(uid);
+    });
 
 final discoverOpenJobPostsProvider =
     FutureProvider.autoDispose<List<OpenJobPost>>((ref) async {
-  final repo = ref.watch(openJobPostRepositoryProvider);
-  final result = await repo.discoverOpenJobPosts();
-  return result.when(
-    success: (list) => list,
-    failure: (message, _) => throw Exception(message),
-  );
-});
+      final repo = ref.watch(openJobPostRepositoryProvider);
+      final result = await repo.discoverOpenJobPosts();
+      return result.when(
+        success: (list) => list,
+        failure: (message, _) => throw Exception(message),
+      );
+    });
 
 final openJobPostByIdProvider = FutureProvider.autoDispose
     .family<OpenJobPost, String>((ref, id) async {
-  final repo = ref.watch(openJobPostRepositoryProvider);
-  final result = await repo.getOpenJobPost(id);
-  return result.when(
-    success: (post) => post,
-    failure: (message, _) => throw Exception(message),
-  );
-});
+      final repo = ref.watch(openJobPostRepositoryProvider);
+      final result = await repo.getOpenJobPost(id);
+      return result.when(
+        success: (post) => post,
+        failure: (message, _) => throw Exception(message),
+      );
+    });
 
 final openJobPostBidsProvider = FutureProvider.autoDispose
     .family<List<OpenJobPostBid>, String>((ref, postId) async {
-  final repo = ref.watch(openJobPostRepositoryProvider);
-  final result = await repo.listBidsForOpenJobPost(postId);
-  return result.when(
-    success: (bids) => bids,
-    failure: (message, _) => throw Exception(message),
-  );
-});
+      final repo = ref.watch(openJobPostRepositoryProvider);
+      final result = await repo.listBidsForOpenJobPost(postId);
+      return result.when(
+        success: (bids) => bids,
+        failure: (message, _) => throw Exception(message),
+      );
+    });
 
 final myServiceRequestsProvider =
-    FutureProvider.family<List<ServiceRequest>, ServiceRequestRole>(
-        (ref, role) async {
-  // Not autoDispose — listener churn during widget rebuilds was causing
-  // /request-services/my to be hit on every blink. Action controllers
-  // explicitly `invalidate()` after mutations.
-  final repo = ref.watch(serviceRequestRepositoryProvider);
-  final result = await repo.listMyRequests(role: role);
-  return result.when(
-    success: (list) => list,
-    failure: (message, _) => throw Exception(message),
-  );
-});
+    FutureProvider.family<List<ServiceRequest>, ServiceRequestRole>((
+      ref,
+      role,
+    ) async {
+      // Not autoDispose — listener churn during widget rebuilds was causing
+      // /request-services/my to be hit on every blink. Action controllers
+      // explicitly `invalidate()` after mutations.
+      final repo = ref.watch(serviceRequestRepositoryProvider);
+      final result = await repo.listMyRequests(role: role);
+      return result.when(
+        success: (list) => list,
+        failure: (message, _) => throw Exception(message),
+      );
+    });
 
 final serviceRequestByIdProvider = FutureProvider.autoDispose
     .family<ServiceRequest, String>((ref, id) async {
-  final repo = ref.watch(serviceRequestRepositoryProvider);
-  final result = await repo.getServiceRequest(id);
-  return result.when(
-    success: (req) => req,
-    failure: (message, _) => throw Exception(message),
-  );
-});
+      final repo = ref.watch(serviceRequestRepositoryProvider);
+      final result = await repo.getServiceRequest(id);
+      return result.when(
+        success: (req) => req,
+        failure: (message, _) => throw Exception(message),
+      );
+    });
 
 final googleGeocodingServiceProvider = Provider<GoogleGeocodingService>((ref) {
   return GoogleGeocodingService();
 });
 
-final forwardGeocodeProvider =
-    FutureProvider.autoDispose.family<({double lat, double lng})?, String>(
-  (ref, address) async {
-    final trimmed = address.trim();
-    if (trimmed.isEmpty) return null;
-    final service = ref.watch(googleGeocodingServiceProvider);
-    return service.forwardGeocode(trimmed);
-  },
-);
+final forwardGeocodeProvider = FutureProvider.autoDispose
+    .family<({double lat, double lng})?, String>((ref, address) async {
+      final trimmed = address.trim();
+      if (trimmed.isEmpty) return null;
+      final service = ref.watch(googleGeocodingServiceProvider);
+      return service.forwardGeocode(trimmed);
+    });
 
 final baselineModelStorageProvider = Provider<BaselineModelStorage>(
   (ref) => BaselineModelStorage(),
@@ -422,8 +430,9 @@ final syntheticSensorSeederProvider = Provider<SyntheticSensorSeeder>(
 /// - Invalidate after seeding new data so the chart picks it up.
 /// - Both [BaselineTrainingViewModel.trainFromRtdb] and the chart widgets read
 ///   from this provider so a single fetch serves both.
-final cachedTrainingSamplesProvider =
-    FutureProvider<List<SensorReading>>((ref) async {
+final cachedTrainingSamplesProvider = FutureProvider<List<SensorReading>>((
+  ref,
+) async {
   final loader = ref.watch(sensorHistoryLoaderProvider);
   List<SensorReading>? out;
   await for (final p in loader.load()) {
@@ -500,12 +509,13 @@ final chatRepositoryProvider = Provider<ChatRepository>((ref) {
 
 final currentChatIdProvider = StateProvider<String?>((ref) => null);
 
-final completionReportRepositoryProvider =
-    Provider<CompletionReportRepository>((ref) {
-  final repo = UnifiedCompletionReportRepository(
-    jobRepository: ref.watch(jobRepositoryProvider),
-    serviceRequestRepository: ref.watch(serviceRequestRepositoryProvider),
-  );
-  ref.onDispose(repo.dispose);
-  return repo;
-});
+final completionReportRepositoryProvider = Provider<CompletionReportRepository>(
+  (ref) {
+    final repo = UnifiedCompletionReportRepository(
+      jobRepository: ref.watch(jobRepositoryProvider),
+      serviceRequestRepository: ref.watch(serviceRequestRepositoryProvider),
+    );
+    ref.onDispose(repo.dispose);
+    return repo;
+  },
+);

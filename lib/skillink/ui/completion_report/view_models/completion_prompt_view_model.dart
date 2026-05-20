@@ -32,7 +32,8 @@ class CompletionPromptState {
   final CompletionReport? submittedReport;
 
   /// True when this prompt was opened for a [ServiceRequest] id (direct
-  /// booking). [job] is a display-only adapter; `/jobs/.../rate` must not be used.
+  /// booking). [job] is a display-only adapter; [job.jobId] is the request id
+  /// used for completion reports and `POST /reviews`.
   final bool isServiceRequestCompletion;
 
   bool get isHomeowner => viewerRole == UserRole.homeowner;

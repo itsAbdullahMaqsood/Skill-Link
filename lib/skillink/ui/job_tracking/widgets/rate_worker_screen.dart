@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:skilllink/skillink/domain/models/user_role.dart';
 import 'package:skilllink/skillink/routing/routes.dart';
+import 'package:skilllink/skillink/ui/auth/view_models/auth_view_model.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_colors.dart';
 import 'package:skilllink/skillink/ui/core/themes/app_typography.dart';
 import 'package:skilllink/skillink/ui/core/ui/app_back_scope.dart';
@@ -9,6 +11,42 @@ import 'package:skilllink/skillink/ui/core/ui/app_text_field.dart';
 import 'package:skilllink/skillink/ui/core/ui/primary_button.dart';
 import 'package:skilllink/skillink/ui/job_tracking/view_models/review_view_model.dart';
 import 'package:skilllink/skillink/utils/app_messenger.dart';
+
+class _RateScreenCopy {
+  const _RateScreenCopy({
+    required this.appBarTitle,
+    required this.headline,
+    required this.subtitle,
+    required this.commentHint,
+    required this.homeRoute,
+  });
+
+  final String appBarTitle;
+  final String headline;
+  final String subtitle;
+  final String commentHint;
+  final String homeRoute;
+
+  factory _RateScreenCopy.forRole(UserRole role) => switch (role) {
+        UserRole.worker => const _RateScreenCopy(
+            appBarTitle: 'Rate customer',
+            headline: 'How was this customer?',
+            subtitle:
+                'Your rating stays anonymous. The customer only sees the score.',
+            commentHint: 'e.g. Clear instructions, respectful, paid on time…',
+            homeRoute: Routes.workerJobs,
+          ),
+        UserRole.homeowner => const _RateScreenCopy(
+            appBarTitle: 'Rate worker',
+            headline: 'How was the job?',
+            subtitle:
+                'Your rating stays anonymous. The worker only sees the score.',
+            commentHint:
+                'e.g. Arrived on time, explained the issue clearly…',
+            homeRoute: Routes.homeownerHome,
+          ),
+      };
+}
 
 class RateWorkerScreen extends ConsumerStatefulWidget {
   const RateWorkerScreen({super.key, required this.jobId});
@@ -29,6 +67,10 @@ class _RateWorkerScreenState extends ConsumerState<RateWorkerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final role =
+        ref.watch(authViewModelProvider).user?.role ?? UserRole.homeowner;
+    final copy = _RateScreenCopy.forRole(role);
+
     final provider = reviewViewModelProvider(widget.jobId);
     final state = ref.watch(provider);
     final vm = ref.read(provider.notifier);
@@ -41,7 +83,7 @@ class _RateWorkerScreenState extends ConsumerState<RateWorkerScreen> {
         );
       }
       if (next.isSubmitted && prev?.isSubmitted != true) {
-        context.go(Routes.homeownerHome);
+        context.go(copy.homeRoute);
         appScaffoldMessengerKey.currentState?.showSnackBar(
           const SnackBar(
             content: Text('Thanks for your feedback!'),
@@ -52,19 +94,19 @@ class _RateWorkerScreenState extends ConsumerState<RateWorkerScreen> {
     });
 
     return AppBackScope(
-      fallbackPath: Routes.homeownerHome,
+      fallbackPath: copy.homeRoute,
       child: Scaffold(
         backgroundColor: AppColors.background,
         appBar: AppBar(
           backgroundColor: AppColors.background,
           elevation: 0,
           scrolledUnderElevation: 0,
-          title: const Text('Rate worker'),
+          title: Text(copy.appBarTitle),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: () => context.canPop()
                 ? context.pop()
-                : context.go(Routes.homeownerHome),
+                : context.go(copy.homeRoute),
           ),
         ),
         body: SafeArea(
@@ -93,8 +135,7 @@ class _RateWorkerScreenState extends ConsumerState<RateWorkerScreen> {
                               width: double.infinity,
                               child: PrimaryButton(
                                 label: 'Done',
-                                onPressed: () =>
-                                    context.go(Routes.homeownerHome),
+                                onPressed: () => context.go(copy.homeRoute),
                               ),
                             ),
                           ],
@@ -104,12 +145,12 @@ class _RateWorkerScreenState extends ConsumerState<RateWorkerScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'How was the job?',
+                            copy.headline,
                             style: AppTypography.headlineSmall,
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Your rating stays anonymous. The worker only sees the score.',
+                            copy.subtitle,
                             style: AppTypography.bodySmall
                                 .copyWith(color: AppColors.textMuted),
                           ),
@@ -124,8 +165,7 @@ class _RateWorkerScreenState extends ConsumerState<RateWorkerScreen> {
                           AppTextField(
                             label: 'Leave a comment (optional)',
                             controller: _commentCtrl,
-                            hint:
-                                'e.g. Arrived on time, explained the issue clearly…',
+                            hint: copy.commentHint,
                             maxLines: 4,
                             onChanged: vm.setComment,
                           ),

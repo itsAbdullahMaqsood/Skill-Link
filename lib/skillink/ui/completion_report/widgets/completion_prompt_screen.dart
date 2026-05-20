@@ -73,21 +73,17 @@ class _CompletionPromptScreenState
 
         final vmState =
             ref.read(completionPromptViewModelProvider(widget.jobId));
-        final isHomeowner = vmState.isHomeowner;
         final job = vmState.job;
         final user = ref.read(authViewModelProvider).user;
 
-        if (isHomeowner && job != null) {
-          if (vmState.isServiceRequestCompletion && context.canPop()) {
-            // Avoid context.go(sentRequestDetail): that replaces the stack with
-            // a single route so system back exits the app instead of leaving detail.
+        if (job != null) {
+          final rateRoute = Routes.rateJob(job.jobId);
+          if (context.canPop()) {
             context.pop();
-            return;
+            context.push(rateRoute);
+          } else {
+            context.go(rateRoute);
           }
-          final destination = vmState.isServiceRequestCompletion
-              ? Routes.sentRequestDetail(job.jobId)
-              : Routes.rateJob(job.jobId);
-          context.go(destination);
           return;
         }
         if (user != null) {
